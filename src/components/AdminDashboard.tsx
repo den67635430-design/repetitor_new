@@ -1,21 +1,22 @@
-
 import React from 'react';
-import { AppState } from '../types';
+import { useAdminStats } from '../hooks/useAdminStats';
 
 interface Props {
-  appState: AppState;
+  testMode: boolean;
   onToggleTest: () => void;
   onBack: () => void;
 }
 
-const AdminDashboard: React.FC<Props> = ({ appState, onToggleTest, onBack }) => {
-  const stats = [
-    { label: 'Всего пользователей', value: '1,245', trend: '+12%' },
-    { label: 'Открытия Mini App', value: '45,890', trend: '+5%' },
-    { label: 'Регистрации сегодня', value: '89', trend: '+22%' },
-    { label: 'Активации триала', value: '640', trend: '+18%' },
-    { label: 'Retention (D7)', value: '42%', trend: '-2%' },
-    { label: 'Топ предмет', value: 'Математика', trend: '' },
+const AdminDashboard: React.FC<Props> = ({ testMode, onToggleTest, onBack }) => {
+  const { stats, loading, refresh } = useAdminStats();
+
+  const statCards = [
+    { label: 'Всего пользователей', value: stats.totalUsers.toString() },
+    { label: 'Регистрации сегодня', value: stats.todayRegistrations.toString() },
+    { label: 'Всего чат-сессий', value: stats.totalSessions.toString() },
+    { label: 'Всего сообщений', value: stats.totalMessages.toString() },
+    { label: 'Активных устройств', value: stats.activeDevices.toString() },
+    { label: 'Топ предмет', value: stats.topSubject },
   ];
 
   return (
@@ -25,9 +26,16 @@ const AdminDashboard: React.FC<Props> = ({ appState, onToggleTest, onBack }) => 
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"/></svg>
         </button>
         <h2 className="text-2xl font-extrabold text-slate-900">Админ-панель</h2>
+        <button
+          onClick={refresh}
+          className="ml-auto p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100"
+          title="Обновить"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
       </div>
 
-      {/* Control Panel */}
+      {/* Test Mode Control */}
       <section className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
         <h3 className="font-bold text-slate-800">Управление режимами</h3>
         <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
@@ -37,48 +45,31 @@ const AdminDashboard: React.FC<Props> = ({ appState, onToggleTest, onBack }) => 
           </div>
           <button 
             onClick={onToggleTest}
-            className={`w-14 h-8 rounded-full relative transition-colors ${appState.testMode ? 'bg-blue-600' : 'bg-slate-300'}`}
+            className={`w-14 h-8 rounded-full relative transition-colors ${testMode ? 'bg-blue-600' : 'bg-slate-300'}`}
           >
-            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${appState.testMode ? 'right-1' : 'left-1'}`} />
+            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${testMode ? 'right-1' : 'left-1'}`} />
           </button>
         </div>
+        {testMode && (
+          <p className="text-xs text-amber-600 bg-amber-50 p-3 rounded-xl font-medium">
+            ⚠️ Тестовый режим активен. Пользователи не видят платные тарифы. Все видят баннер «Тестирование».
+          </p>
+        )}
       </section>
 
       {/* Statistics */}
       <section className="space-y-4">
         <div className="flex justify-between items-center">
-          <h3 className="font-bold text-slate-800">Статистика</h3>
-          <button className="text-blue-600 text-xs font-bold px-3 py-1 bg-blue-50 rounded-full">Экспорт CSV</button>
+          <h3 className="font-bold text-slate-800">Статистика (live)</h3>
+          {loading && (
+            <span className="text-xs text-slate-400 animate-pulse">Загрузка...</span>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {stats.map((s, i) => (
+          {statCards.map((s, i) => (
             <div key={i} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">{s.label}</p>
-              <div className="flex items-end justify-between">
-                <span className="text-lg font-extrabold text-blue-900">{s.value}</span>
-                <span className={`text-[10px] font-bold ${s.trend.startsWith('+') ? 'text-emerald-500' : 'text-rose-500'}`}>
-                  {s.trend}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Recent Events */}
-      <section className="space-y-3">
-        <h3 className="font-bold text-slate-800">Последние действия</h3>
-        <div className="space-y-2">
-          {[1,2,3].map(i => (
-            <div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs">👤</div>
-                <div>
-                  <p className="text-xs font-bold">User_{Math.floor(Math.random()*1000)}</p>
-                  <p className="text-[10px] text-slate-500">Зарегистрировался в системе</p>
-                </div>
-              </div>
-              <span className="text-[10px] text-slate-400">2 мин назад</span>
+              <span className="text-lg font-extrabold text-blue-900">{s.value}</span>
             </div>
           ))}
         </div>

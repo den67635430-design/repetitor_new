@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { SubscriptionStatus, SubscriptionInfo, AppState } from './types';
+import { SubscriptionStatus, SubscriptionInfo } from './types';
 import { useAuth } from './hooks/useAuth';
 import { useDeviceLimit } from './hooks/useDeviceLimit';
+import { useAppSettings } from './hooks/useAppSettings';
 import WelcomePage from './components/WelcomePage';
 import AuthPage from './components/AuthPage';
 import SetupProfile from './components/SetupProfile';
@@ -17,33 +18,24 @@ type Screen = 'welcome' | 'auth' | 'setup' | 'home' | 'subjects' | 'chat' | 'gam
 const App: React.FC = () => {
   const { user, profile, isAdmin, loading, signOut, hasProfile, refreshProfile } = useAuth();
   const { checkAndRegisterDevice } = useDeviceLimit();
+  const { testMode, toggleTestMode } = useAppSettings();
   const [sub, setSub] = useState<SubscriptionInfo>({ status: SubscriptionStatus.NONE });
-  const [appState, setAppState] = useState<AppState>({ testMode: false });
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
   const [deviceBlocked, setDeviceBlocked] = useState<string | null>(null);
 
-
   // Route user based on auth state
   useEffect(() => {
     if (loading) return;
-
     if (!user) {
-      // Not logged in — show welcome or auth
-      if (currentScreen !== 'auth') {
-        setCurrentScreen('welcome');
-      }
+      if (currentScreen !== 'auth') setCurrentScreen('welcome');
       return;
     }
-
-    // Logged in but no profile — setup
     if (!hasProfile) {
       setCurrentScreen('setup');
       return;
     }
-
-    // Logged in with profile — go home (only if on welcome/auth/setup)
     if (['welcome', 'auth', 'setup'].includes(currentScreen)) {
       setCurrentScreen('home');
     }
@@ -60,7 +52,7 @@ const App: React.FC = () => {
     }
   }, [user, hasProfile]);
 
-  // Test mode from Telegram
+  // Telegram WebApp init
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     if (tg) {
@@ -68,14 +60,6 @@ const App: React.FC = () => {
       tg.expand();
     }
   }, []);
-
-  const handleToggleTestMode = () => {
-    setAppState(prev => ({
-      ...prev,
-      testMode: !prev.testMode,
-      lastTestBroadcastAt: !prev.testMode ? new Date().toISOString() : prev.lastTestBroadcastAt,
-    }));
-  };
 
   const handleLogout = async () => {
     await signOut();
@@ -102,10 +86,7 @@ const App: React.FC = () => {
           <div className="text-6xl">🔒</div>
           <h2 className="text-xl font-bold text-slate-900">Лимит устройств</h2>
           <p className="text-slate-600 text-sm">{deviceBlocked}</p>
-          <button
-            onClick={handleLogout}
-            className="w-full bg-blue-600 text-white py-3 rounded-2xl font-bold"
-          >
+          <button onClick={handleLogout} className="w-full bg-blue-600 text-white py-3 rounded-2xl font-bold">
             Выйти
           </button>
         </div>
@@ -123,16 +104,9 @@ const App: React.FC = () => {
     return <AuthPage onBack={() => setCurrentScreen('welcome')} />;
   }
 
-  // Profile setup (after auth, before home)
+  // Profile setup
   if (currentScreen === 'setup' && user && !hasProfile) {
-    return (
-      <SetupProfile
-        userId={user.id}
-        onComplete={() => {
-          refreshProfile();
-        }}
-      />
-    );
+    return <SetupProfile userId={user.id} onComplete={() => refreshProfile()} />;
   }
 
   // If user not logged in at this point, go to welcome
@@ -140,7 +114,6 @@ const App: React.FC = () => {
     return <WelcomePage onStart={() => setCurrentScreen('auth')} />;
   }
 
-  // Build user-like object for components that need it
   const userProfile = {
     id: user.id,
     name: profile.name,
@@ -149,6 +122,9 @@ const App: React.FC = () => {
     learningGoal: profile.learning_goal,
   };
 
+  // Show prices only if NOT in test mode AND user doesn't have active subscription
+  const showPrices = !testMode && sub.status !== SubscriptionStatus.SUBSCRIBED_ACTIVE;
+
   const renderScreen = () => {
     switch (currentScreen) {
       case 'home':
@@ -156,20 +132,17 @@ const App: React.FC = () => {
           <Home
             user={{ ...userProfile, role: 'USER' as any, registeredAt: '', consents: { privacyPolicy: true, termsOfUse: true, dataProcessing: true } }}
             sub={sub}
-            appState={appState}
+            testMode={testMode}
+            isAdmin={isAdmin}
             onNavigate={setCurrentScreen as any}
             onSelectSubject={setSelectedSubject}
-            isAdmin={isAdmin}
           />
         );
       case 'subjects':
         return (
           <SubjectGrid
             onBack={() => setCurrentScreen('home')}
-            onSelect={(id) => {
-              setSelectedSubject(id);
-              setCurrentScreen('chat');
-            }}
+            onSelect={(id) => { setSelectedSubject(id); setCurrentScreen('chat'); }}
           />
         );
       case 'exams':
@@ -177,10 +150,7 @@ const App: React.FC = () => {
           <SubjectGrid
             isExam
             onBack={() => setCurrentScreen('home')}
-            onSelect={(id) => {
-              setSelectedSubject(id);
-              setCurrentScreen('chat');
-            }}
+            onSelect={(id) => { setSelectedSubject(id); setCurrentScreen('chat'); }}
           />
         );
       case 'chat':
@@ -197,8 +167,8 @@ const App: React.FC = () => {
       case 'admin':
         return (
           <AdminDashboard
-            appState={appState}
-            onToggleTest={handleToggleTestMode}
+            testMode={testMode}
+            onToggleTest={toggleTestMode}
             onBack={() => setCurrentScreen('home')}
           />
         );
@@ -226,7 +196,7 @@ const App: React.FC = () => {
           <span className="font-bold text-blue-900 tracking-tight">Репетитор под рукой</span>
         </div>
         <div className="flex items-center gap-3">
-          {appState.testMode && (
+          {testMode && (
             <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded uppercase tracking-wider animate-pulse">
               🧪 Тестирование
             </span>
@@ -236,6 +206,15 @@ const App: React.FC = () => {
           </span>
         </div>
       </header>
+
+      {/* Test Mode Banner for all users */}
+      {testMode && !isAdmin && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center">
+          <p className="text-xs text-amber-700 font-semibold">
+            🧪 Приложение находится в режиме тестирования. Платные услуги временно недоступны.
+          </p>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto scroll-smooth">{renderScreen()}</main>
@@ -252,10 +231,7 @@ const App: React.FC = () => {
           icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />}
           label="Помощь"
           active={currentScreen === 'chat' && selectedSubject === 'Support'}
-          onClick={() => {
-            setSelectedSubject('Support');
-            setCurrentScreen('chat');
-          }}
+          onClick={() => { setSelectedSubject('Support'); setCurrentScreen('chat'); }}
         />
         <NavButton
           icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />}
@@ -266,10 +242,10 @@ const App: React.FC = () => {
         {isAdmin && (
           <NavButton
             icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />}
-            label={appState.testMode ? 'Тест ✓' : 'Тест'}
-            active={appState.testMode}
+            label={testMode ? 'Тест ✓' : 'Тест'}
+            active={testMode}
             activeColor="text-amber-500"
-            onClick={handleToggleTestMode}
+            onClick={toggleTestMode}
           />
         )}
         {isAdmin && (
