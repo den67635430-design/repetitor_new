@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,7 +7,111 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Build system instruction based on user context
+// ── Rate Limiting ──────────────────────────────────────────────────────
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const limit = rateLimitMap.get(userId);
+
+  if (!limit || now > limit.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + 60000 }); // 1 min window
+    return true;
+  }
+
+  if (limit.count >= 15) {
+    return false;
+  }
+
+  limit.count++;
+  return true;
+}
+
+// ── Input Validation ───────────────────────────────────────────────────
+const VALID_USER_TYPES = ["PRESCHOOLER", "SCHOOLER"];
+const MAX_MESSAGE_LENGTH = 4000;
+const MAX_MESSAGES = 50;
+const MAX_SUBJECT_LENGTH = 100;
+const MAX_MODE_LENGTH = 50;
+
+function sanitizeString(text: string, maxLength: number): string {
+  return text
+    .trim()
+    .replace(/[\x00-\x1F\x7F]/g, "") // Remove control characters
+    .substring(0, maxLength);
+}
+
+interface ValidatedInput {
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  userType: string;
+  subject: string;
+  mode: string;
+  classLevel?: number;
+}
+
+function validateInput(body: unknown): ValidatedInput | string {
+  if (!body || typeof body !== "object") {
+    return "Invalid request body";
+  }
+
+  const { messages, userType, subject, mode, classLevel } = body as Record<string, unknown>;
+
+  // Validate messages
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return "Messages must be a non-empty array";
+  }
+  if (messages.length > MAX_MESSAGES) {
+    return `Too many messages (max ${MAX_MESSAGES})`;
+  }
+
+  const validatedMessages: Array<{ role: "user" | "assistant"; content: string }> = [];
+  for (const msg of messages) {
+    if (!msg || typeof msg !== "object") return "Invalid message format";
+    const { role, content } = msg as Record<string, unknown>;
+    if (role !== "user" && role !== "assistant") return "Invalid message role";
+    if (typeof content !== "string" || content.trim().length === 0) return "Message content must be a non-empty string";
+    validatedMessages.push({
+      role: role as "user" | "assistant",
+      content: sanitizeString(content, MAX_MESSAGE_LENGTH),
+    });
+  }
+
+  // Validate userType
+  const validUserType = typeof userType === "string" && VALID_USER_TYPES.includes(userType)
+    ? userType
+    : "SCHOOLER";
+
+  // Validate subject
+  const validSubject = typeof subject === "string"
+    ? sanitizeString(subject, MAX_SUBJECT_LENGTH)
+    : "Общий";
+  if (validSubject.length === 0) return "Subject cannot be empty";
+
+  // Validate mode
+  const validMode = typeof mode === "string"
+    ? sanitizeString(mode, MAX_MODE_LENGTH)
+    : "explain";
+
+  // Validate classLevel
+  let validClassLevel: number | undefined;
+  if (classLevel !== undefined && classLevel !== null) {
+    const level = Number(classLevel);
+    if (!Number.isInteger(level) || level < 1 || level > 11) {
+      return "Class level must be an integer between 1 and 11";
+    }
+    validClassLevel = level;
+  }
+
+  return {
+    messages: validatedMessages,
+    userType: validUserType,
+    subject: validSubject,
+    mode: validMode,
+    classLevel: validClassLevel,
+  };
+}
+
+// ── System Instruction Builder ─────────────────────────────────────────
 function getSystemInstruction(
   userType: string,
   subject: string,
@@ -33,7 +138,7 @@ function getSystemInstruction(
   Если тебе предоставлен дополнительный контекст из интернета, используй его для максимально точного и актуального ответа.`;
 }
 
-// Determine if the user's message needs web search for accuracy
+// ── Web Search ─────────────────────────────────────────────────────────
 function shouldSearchWeb(message: string): boolean {
   const searchTriggers = [
     "формула", "закон", "теорема", "определение", "правило",
@@ -48,7 +153,6 @@ function shouldSearchWeb(message: string): boolean {
   return searchTriggers.some((trigger) => lowerMsg.includes(trigger));
 }
 
-// Search the web via Firecrawl for relevant context
 async function searchWebContext(query: string, subject: string): Promise<string> {
   const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
   if (!apiKey) {
@@ -57,8 +161,10 @@ async function searchWebContext(query: string, subject: string): Promise<string>
   }
 
   try {
-    const searchQuery = `${subject} ${query} учебник школа`;
-    console.log("Searching web for:", searchQuery);
+    const sanitizedQuery = sanitizeString(query, 200);
+    const sanitizedSubject = sanitizeString(subject, 100);
+    const searchQuery = `${sanitizedSubject} ${sanitizedQuery} учебник школа`;
+    console.log("Searching web for:", searchQuery.substring(0, 80));
 
     const response = await fetch("https://api.firecrawl.dev/v1/search", {
       method: "POST",
@@ -87,7 +193,6 @@ async function searchWebContext(query: string, subject: string): Promise<string>
 
     if (!data?.data || data.data.length === 0) return "";
 
-    // Extract relevant content snippets
     const snippets = data.data
       .slice(0, 3)
       .map((result: any) => {
@@ -108,41 +213,86 @@ async function searchWebContext(query: string, subject: string): Promise<string>
   }
 }
 
+// ── Main Handler ───────────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messages, userType, subject, mode, classLevel } = await req.json();
+    // ── Authentication ──────────────────────────────────────────────
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Необходима авторизация" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: "Недействительный токен авторизации" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userId = claimsData.claims.sub as string;
+
+    // ── Rate Limiting ───────────────────────────────────────────────
+    if (!checkRateLimit(userId)) {
+      return new Response(
+        JSON.stringify({ error: "Слишком много запросов. Подождите немного и попробуйте снова." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── Input Validation ────────────────────────────────────────────
+    const body = await req.json();
+    const validated = validateInput(body);
+
+    if (typeof validated === "string") {
+      return new Response(
+        JSON.stringify({ error: validated }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { messages, userType, subject, mode, classLevel } = validated;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+      console.error("LOVABLE_API_KEY is not configured");
+      return new Response(
+        JSON.stringify({ error: "Сервис временно недоступен" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Build system instruction
-    const systemInstruction = getSystemInstruction(
-      userType || "SCHOOLER",
-      subject || "Общий",
-      mode || "explain",
-      classLevel
-    );
+    const systemInstruction = getSystemInstruction(userType, subject, mode, classLevel);
 
     // Get the latest user message
-    const lastUserMessage = messages?.[messages.length - 1]?.content || "";
+    const lastUserMessage = messages[messages.length - 1]?.content || "";
 
     // Search web if the question might benefit from it
     let webContext = "";
     if (shouldSearchWeb(lastUserMessage)) {
-      console.log("Web search triggered for:", lastUserMessage.substring(0, 80));
-      webContext = await searchWebContext(lastUserMessage, subject || "");
+      console.log("Web search triggered for user:", userId);
+      webContext = await searchWebContext(lastUserMessage, subject);
     }
 
-    // Build the full system prompt with web context
     const fullSystemPrompt = systemInstruction + webContext;
 
-    console.log("Calling Lovable AI Gateway, web context:", webContext ? "yes" : "no");
+    console.log("Calling AI Gateway for user:", userId, "web context:", webContext ? "yes" : "no");
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -175,27 +325,25 @@ serve(async (req) => {
       }
       if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "Необходимо пополнить баланс AI-кредитов." }),
+          JSON.stringify({ error: "Сервис временно недоступен." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       return new Response(
-        JSON.stringify({ error: "Ошибка AI сервиса" }),
+        JSON.stringify({ error: "Сервис временно недоступен" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("Streaming response from AI gateway");
+    console.log("Streaming response for user:", userId);
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
     console.error("Chat function error:", e);
     return new Response(
-      JSON.stringify({
-        error: e instanceof Error ? e.message : "Неизвестная ошибка",
-      }),
+      JSON.stringify({ error: "Сервис временно недоступен" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
