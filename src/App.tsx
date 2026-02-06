@@ -139,7 +139,7 @@ const App: React.FC = () => {
           />
         );
       default:
-        return <Home user={user} sub={sub} appState={appState} onNavigate={setCurrentScreen} isAdmin={isAdmin} />;
+        return <Home user={user} sub={sub} appState={appState} onNavigate={setCurrentScreen} onSelectSubject={setSelectedSubject} isAdmin={isAdmin} />;
     }
   };
 
