@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { UserProfile, ChatMessage, LearningMode } from '../types';
+import { UserProfile, ChatMessage } from '../types';
 import { LEARNING_MODES } from '../constants';
-import { sendMessageStream, getSystemInstruction } from '../services/geminiService';
+import { streamChat } from '../services/chatService';
 
 interface Props {
   user: UserProfile;
@@ -17,6 +16,7 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [selectedMode, setSelectedMode] = useState(mode);
   const [showModes, setShowModes] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -28,6 +28,7 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
 
   const handleSend = async () => {
     if (!input.trim() || isTyping) return;
+    setError(null);
 
     const userMessage: ChatMessage = {
       role: 'user',
@@ -39,39 +40,56 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
     setInput('');
     setIsTyping(true);
 
-    const systemInstruction = getSystemInstruction(user.type, subject, selectedMode, user.classLevel);
-    
-    // Format history for Gemini API
-    const history = messages.map(m => ({
-      role: m.role,
-      parts: [{ text: m.text }]
-    }));
+    // Build messages array in OpenAI format for the edge function
+    const apiMessages = [
+      ...messages.map(m => ({
+        role: m.role === 'model' ? 'assistant' as const : 'user' as const,
+        content: m.text,
+      })),
+      { role: 'user' as const, content: input },
+    ];
 
     let currentAiResponse = "";
-    try {
-      const stream = sendMessageStream(input, systemInstruction, history);
-      
-      setMessages(prev => [...prev, { role: 'model', text: '', timestamp: new Date().toISOString() }]);
 
-      for await (const chunk of stream) {
+    // Add empty AI message placeholder
+    setMessages(prev => [...prev, { role: 'model', text: '', timestamp: new Date().toISOString() }]);
+
+    await streamChat({
+      messages: apiMessages,
+      userType: user.type,
+      subject,
+      mode: selectedMode,
+      classLevel: user.classLevel,
+      onDelta: (chunk) => {
         currentAiResponse += chunk;
         setMessages(prev => {
           const newMessages = [...prev];
-          newMessages[newMessages.length - 1].text = currentAiResponse;
+          newMessages[newMessages.length - 1] = {
+            ...newMessages[newMessages.length - 1],
+            text: currentAiResponse,
+          };
           return newMessages;
         });
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsTyping(false);
-    }
+      },
+      onDone: () => {
+        setIsTyping(false);
+      },
+      onError: (errMsg) => {
+        setError(errMsg);
+        setIsTyping(false);
+        // Remove empty AI message if error
+        if (!currentAiResponse) {
+          setMessages(prev => prev.slice(0, -1));
+        }
+      },
+    });
   };
 
   const startWithMode = (mId: string) => {
     setSelectedMode(mId);
     setShowModes(false);
-    const initialPrompt = `Привет! Я хочу изучить тему в режиме "${LEARNING_MODES.find(m => m.id === mId)?.name}". С чего начнем?`;
+    const modeName = LEARNING_MODES.find(m => m.id === mId)?.name;
+    const initialPrompt = `Привет! Я хочу изучить тему в режиме "${modeName}". С чего начнем?`;
     setInput(initialPrompt);
   };
 
@@ -90,7 +108,10 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
             </span>
           </div>
         </div>
-        <div className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold">LIVE</div>
+        <div className="flex items-center gap-2">
+          <div className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-[10px] font-bold">AI</div>
+          <div className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold">LIVE</div>
+        </div>
       </div>
 
       {/* Messages */}
@@ -127,7 +148,8 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
             </div>
           </div>
         ))}
-        {isTyping && (
+
+        {isTyping && messages[messages.length - 1]?.text === '' && (
           <div className="flex justify-start animate-pulse">
             <div className="bg-white border border-slate-100 px-4 py-3 rounded-2xl rounded-tl-none shadow-sm">
               <div className="flex gap-1">
@@ -135,6 +157,14 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
                 <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                 <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="flex justify-center">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-xl text-sm">
+              {error}
             </div>
           </div>
         )}
@@ -168,7 +198,7 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
             </button>
           </div>
           <p className="text-[9px] text-center text-slate-400 font-medium">
-            AI может ошибаться. Используйте только в образовательных целях.
+            AI может ошибаться • Данные проверяются через интернет
           </p>
         </div>
       )}
