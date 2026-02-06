@@ -138,6 +138,24 @@ function getSystemInstruction(
   Если тебе предоставлен дополнительный контекст из интернета, используй его для максимально точного и актуального ответа.`;
 }
 
+// ── Web Content Sanitization ──────────────────────────────────────────
+function sanitizeWebContent(text: string): string {
+  return text
+    // Remove script tags and their content
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    // Remove style tags and their content
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    // Remove all HTML tags
+    .replace(/<[^>]+>/g, "")
+    // Remove javascript: URLs
+    .replace(/javascript:/gi, "")
+    // Remove data: URLs
+    .replace(/data:[^\s]+/gi, "")
+    // Normalize whitespace
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ── Web Search ─────────────────────────────────────────────────────────
 function shouldSearchWeb(message: string): boolean {
   const searchTriggers = [
@@ -196,12 +214,15 @@ async function searchWebContext(query: string, subject: string): Promise<string>
     const snippets = data.data
       .slice(0, 3)
       .map((result: any) => {
-        const title = result.title || "";
-        const content = result.markdown
+        const title = sanitizeWebContent(result.title || "");
+        const rawContent = result.markdown
           ? result.markdown.substring(0, 800)
           : result.description || "";
+        const content = sanitizeWebContent(rawContent);
+        if (!title && !content) return null;
         return `[${title}]\n${content}`;
       })
+      .filter(Boolean)
       .join("\n\n---\n\n");
 
     return snippets
