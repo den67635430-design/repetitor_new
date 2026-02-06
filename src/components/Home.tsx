@@ -1,19 +1,19 @@
 
 import React from 'react';
-import { UserProfile, SubscriptionInfo, AppState, SubscriptionStatus } from '../types';
+import { UserProfile, SubscriptionInfo, SubscriptionStatus } from '../types';
 
 interface Props {
   user: UserProfile;
   sub: SubscriptionInfo;
-  appState: AppState;
+  testMode: boolean;
+  isAdmin: boolean;
   onNavigate: (screen: any) => void;
   onSelectSubject: (id: string) => void;
-  isAdmin: boolean;
 }
 
-const Home: React.FC<Props> = ({ user, sub, appState, onNavigate, onSelectSubject, isAdmin }) => {
+const Home: React.FC<Props> = ({ user, sub, testMode, isAdmin, onNavigate, onSelectSubject }) => {
   const isPreschool = user.type === 'PRESCHOOLER';
-  const showPrices = !appState.testMode && sub.status !== SubscriptionStatus.SUBSCRIBED_ACTIVE;
+  const showPrices = !testMode && sub.status !== SubscriptionStatus.SUBSCRIBED_ACTIVE;
 
   return (
     <div className="p-5 space-y-6 animate-slide-in">
@@ -29,7 +29,7 @@ const Home: React.FC<Props> = ({ user, sub, appState, onNavigate, onSelectSubjec
           <div>
             <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider mb-1">Ваш статус</p>
             <h3 className="text-lg font-bold">
-              {appState.testMode ? 'Тестовый доступ активен' : 
+              {testMode ? 'Тестовый доступ активен' : 
                sub.status === SubscriptionStatus.NONE ? 'Пробный период 10 дней' : 
                sub.status === SubscriptionStatus.TRIAL_ACTIVE ? 'Пробный период' : 
                sub.status === SubscriptionStatus.SUBSCRIBED_ACTIVE ? 'Подписка активна' : 'Подписка истекла'}
