@@ -6,7 +6,7 @@ interface ProfileData {
   name: string;
   user_type: string;
   class_level: number | null;
-  learning_goal: string;
+  learning_goal: string | null;
 }
 
 export function useAuth() {

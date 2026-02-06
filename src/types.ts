@@ -24,7 +24,7 @@ export interface UserProfile {
   role: UserRole;
   type: UserType;
   classLevel?: number; // 1-11
-  learningGoal: string;
+  learningGoal: string | null;
   registeredAt: string;
   consents: {
     privacyPolicy: boolean;

@@ -131,7 +131,7 @@ const Profile: React.FC<Props> = ({ user, sub, onBack, onLogout, onUpdateProfile
       <section className="space-y-3">
         <h4 className="font-bold text-slate-800 ml-1">Личный кабинет ученика</h4>
         <div className="bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-sm">
-          <ProfileItem icon="🎯" label="Цель" value={user.learningGoal} />
+          <ProfileItem icon="🎯" label="Цель" value={user.learningGoal ?? 'Не указана'} />
           <div className="p-4 bg-blue-50 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-xl">⭐</span>

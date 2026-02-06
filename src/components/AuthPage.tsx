@@ -5,17 +5,103 @@ interface Props {
   onBack: () => void;
 }
 
+const EyeIcon = ({ open }: { open: boolean }) => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    {open ? (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+      </>
+    ) : (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L6.59 6.59m7.532 7.532l3.29 3.29M3 3l18 18" />
+      </>
+    )}
+  </svg>
+);
+
+const PasswordInput = ({
+  value,
+  onChange,
+  placeholder,
+  autoComplete,
+  label,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  autoComplete: string;
+  label: string;
+}) => {
+  const [show, setShow] = useState(false);
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-slate-700 mb-1">{label}</label>
+      <div className="relative">
+        <input
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full px-4 py-3 pr-12 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+        />
+        <button
+          type="button"
+          onClick={() => setShow(!show)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+          tabIndex={-1}
+        >
+          <EyeIcon open={show} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const AuthPage: React.FC<Props> = ({ onBack }) => {
   const [mode, setMode] = useState<'login' | 'signup'>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showResend, setShowResend] = useState(false);
 
   const validateEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const handleResendEmail = async () => {
+    if (!email.trim() || !validateEmail(email.trim())) {
+      setError('Введите корректный email для повторной отправки');
+      return;
+    }
+
+    setResending(true);
+    setError(null);
+
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
+
+      if (resendError) {
+        setError(resendError.message);
+      } else {
+        setSuccessMsg('Письмо отправлено повторно! Проверьте почту.');
+      }
+    } catch {
+      setError('Ошибка при отправке. Попробуйте позже.');
+    } finally {
+      setResending(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,7 +109,6 @@ const AuthPage: React.FC<Props> = ({ onBack }) => {
     setError(null);
     setSuccessMsg(null);
 
-    // Validation
     if (!email.trim()) {
       setError('Введите email');
       return;
@@ -64,6 +149,7 @@ const AuthPage: React.FC<Props> = ({ onBack }) => {
         }
 
         setSuccessMsg('Проверьте вашу почту для подтверждения регистрации!');
+        setShowResend(true);
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: email.trim(),
@@ -73,12 +159,14 @@ const AuthPage: React.FC<Props> = ({ onBack }) => {
         if (signInError) {
           if (signInError.message.includes('Invalid login')) {
             setError('Неверный email или пароль');
+          } else if (signInError.message.includes('Email not confirmed')) {
+            setError('Email не подтверждён. Проверьте почту или отправьте письмо повторно.');
+            setShowResend(true);
           } else {
             setError(signInError.message);
           }
           return;
         }
-        // Auth state listener in App.tsx handles navigation
       }
     } catch {
       setError('Ошибка подключения. Проверьте интернет.');
@@ -120,7 +208,7 @@ const AuthPage: React.FC<Props> = ({ onBack }) => {
           {/* Toggle */}
           <div className="flex bg-slate-100 rounded-xl p-1">
             <button
-              onClick={() => { setMode('signup'); setError(null); setSuccessMsg(null); }}
+              onClick={() => { setMode('signup'); setError(null); setSuccessMsg(null); setShowResend(false); }}
               className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
                 mode === 'signup'
                   ? 'bg-white text-blue-700 shadow-sm'
@@ -130,7 +218,7 @@ const AuthPage: React.FC<Props> = ({ onBack }) => {
               Регистрация
             </button>
             <button
-              onClick={() => { setMode('login'); setError(null); setSuccessMsg(null); }}
+              onClick={() => { setMode('login'); setError(null); setSuccessMsg(null); setShowResend(false); }}
               className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
                 mode === 'login'
                   ? 'bg-white text-blue-700 shadow-sm'
@@ -155,30 +243,22 @@ const AuthPage: React.FC<Props> = ({ onBack }) => {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Пароль</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                placeholder="Минимум 6 символов"
-                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              />
-            </div>
+            <PasswordInput
+              value={password}
+              onChange={setPassword}
+              placeholder="Минимум 6 символов"
+              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              label="Пароль"
+            />
 
             {mode === 'signup' && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Повторите пароль</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  placeholder="Ещё раз пароль"
-                  autoComplete="new-password"
-                />
-              </div>
+              <PasswordInput
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                placeholder="Ещё раз пароль"
+                autoComplete="new-password"
+                label="Повторите пароль"
+              />
             )}
 
             {error && (
@@ -191,6 +271,17 @@ const AuthPage: React.FC<Props> = ({ onBack }) => {
               <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm">
                 {successMsg}
               </div>
+            )}
+
+            {showResend && (
+              <button
+                type="button"
+                onClick={handleResendEmail}
+                disabled={resending}
+                className="w-full py-3 rounded-xl font-semibold text-sm border-2 border-blue-200 text-blue-600 hover:bg-blue-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {resending ? 'Отправляем...' : '📩 Отправить письмо повторно'}
+              </button>
             )}
 
             <button
