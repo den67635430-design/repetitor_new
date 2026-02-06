@@ -61,10 +61,11 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
       .from('chat-attachments')
       .upload(path, file);
     if (error) return null;
-    const { data: urlData } = supabase.storage
+    // Use signed URL for private bucket (1 hour expiry)
+    const { data: urlData } = await supabase.storage
       .from('chat-attachments')
-      .getPublicUrl(path);
-    return urlData.publicUrl;
+      .createSignedUrl(path, 3600);
+    return urlData?.signedUrl || null;
   };
 
   const handleSend = async () => {
