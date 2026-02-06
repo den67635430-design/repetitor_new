@@ -21,13 +21,6 @@ const App: React.FC = () => {
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
 
-  // Check for admin key in URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('admin_key') === 'reptutor2024') {
-      localStorage.setItem('admin_access', 'true');
-    }
-  }, []);
 
   // Route user based on auth state
   useEffect(() => {
