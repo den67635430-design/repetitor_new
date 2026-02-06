@@ -111,7 +111,9 @@ export async function streamChat({
 
     onDone();
   } catch (error) {
-    console.error("Stream chat error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Stream chat error:", error);
+    }
     onError("Ошибка подключения. Проверьте интернет и попробуйте снова.");
   }
 }
