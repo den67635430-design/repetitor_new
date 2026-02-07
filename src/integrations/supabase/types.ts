@@ -136,6 +136,7 @@ export type Database = {
       profiles: {
         Row: {
           class_level: number | null
+          client_id: number | null
           created_at: string
           id: string
           learning_goal: string | null
@@ -143,9 +144,11 @@ export type Database = {
           updated_at: string
           user_id: string
           user_type: string
+          username: string | null
         }
         Insert: {
           class_level?: number | null
+          client_id?: number | null
           created_at?: string
           id?: string
           learning_goal?: string | null
@@ -153,9 +156,11 @@ export type Database = {
           updated_at?: string
           user_id: string
           user_type?: string
+          username?: string | null
         }
         Update: {
           class_level?: number | null
+          client_id?: number | null
           created_at?: string
           id?: string
           learning_goal?: string | null
@@ -163,6 +168,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           user_type?: string
+          username?: string | null
         }
         Relationships: []
       }

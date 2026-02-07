@@ -188,6 +188,8 @@ const App: React.FC = () => {
             onBack={() => setCurrentScreen('home')}
             onLogout={handleLogout}
             onUpdateProfile={refreshProfile}
+            username={profile.username}
+            clientId={profile.client_id}
           />
         );
       default:

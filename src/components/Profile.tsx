@@ -8,9 +8,11 @@ interface Props {
   onBack: () => void;
   onLogout: () => void;
   onUpdateProfile: () => void;
+  username?: string | null;
+  clientId?: number | null;
 }
 
-const Profile: React.FC<Props> = ({ user, sub, onBack, onLogout, onUpdateProfile }) => {
+const Profile: React.FC<Props> = ({ user, sub, onBack, onLogout, onUpdateProfile, username, clientId }) => {
   const [editingType, setEditingType] = useState(false);
   const [selectedType, setSelectedType] = useState(user.type);
   const [classLevel, setClassLevel] = useState(user.classLevel ?? 1);
@@ -54,6 +56,19 @@ const Profile: React.FC<Props> = ({ user, sub, onBack, onLogout, onUpdateProfile
           <p className="text-slate-500 text-sm font-medium">
             {user.type === 'PRESCHOOLER' ? 'Дошкольник' : `${user.classLevel} класс`}
           </p>
+        </div>
+        {/* Username & Client ID */}
+        <div className="flex flex-col items-center gap-1 pt-2 border-t border-slate-100">
+          {username && (
+            <p className="text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">Username:</span> {username}
+            </p>
+          )}
+          {clientId && (
+            <p className="text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">ID клиента:</span> #{clientId}
+            </p>
+          )}
         </div>
       </section>
 

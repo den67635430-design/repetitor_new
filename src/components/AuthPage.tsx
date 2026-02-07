@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable/index';
+import SupportButton from './SupportButton';
 
 interface Props {
   onBack: () => void;
@@ -220,7 +221,8 @@ const AuthPage: React.FC<Props> = ({ onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 animate-slide-in">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 animate-slide-in relative">
+      <SupportButton />
       <div className="w-full max-w-md">
         {/* Back button */}
         <button

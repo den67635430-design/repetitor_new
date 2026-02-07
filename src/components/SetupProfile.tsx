@@ -26,12 +26,15 @@ const SetupProfile: React.FC<Props> = ({ userId, onComplete }) => {
     setError(null);
 
     try {
+      const generatedUsername = name.trim().toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4);
+      
       const { error: insertError } = await supabase.from('profiles').insert({
         user_id: userId,
         name: name.trim(),
         user_type: userType,
         class_level: userType === UserType.SCHOOLER ? classLevel : null,
         learning_goal: goal,
+        username: generatedUsername,
       });
 
       if (insertError) {

@@ -1,12 +1,13 @@
 import React from 'react';
-
+import SupportButton from './SupportButton';
 interface Props {
   onStart: () => void;
 }
 
 const WelcomePage: React.FC<Props> = ({ onStart }) => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-700 to-violet-800 flex flex-col items-center justify-center p-6 text-center animate-slide-in">
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-700 to-violet-800 flex flex-col items-center justify-center p-6 text-center animate-slide-in relative">
+      <SupportButton variant="light" />
       {/* Logo */}
       <div className="w-24 h-24 bg-white/20 backdrop-blur-md rounded-3xl flex items-center justify-center mb-8 shadow-2xl border border-white/30">
         <span className="text-5xl">📚</span>

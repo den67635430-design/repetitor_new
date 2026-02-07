@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ChatMessage } from '../types';
-import { LEARNING_MODES } from '../constants';
 import { streamChat } from '../services/chatService';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
@@ -9,7 +8,6 @@ import { supabase } from '@/integrations/supabase/client';
 import ChatHeader from './chat/ChatHeader';
 import ChatMessages from './chat/ChatMessages';
 import ChatInput from './chat/ChatInput';
-import ModeSelector from './chat/ModeSelector';
 import ChatHistory from './chat/ChatHistory';
 
 interface Props {
@@ -23,13 +21,13 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [selectedMode, setSelectedMode] = useState(mode);
-  const [showModes, setShowModes] = useState(true);
+  const [selectedMode] = useState(mode);
   const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [attachedImage, setAttachedImage] = useState<{ file: File; preview: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [greetingSent, setGreetingSent] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const isPreschool = user.type === 'PRESCHOOLER';
@@ -54,6 +52,19 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
     }
   }, [transcript]);
 
+  // Send greeting on mount (no mode selector)
+  useEffect(() => {
+    if (!greetingSent && messages.length === 0) {
+      const greeting: ChatMessage = {
+        role: 'model',
+        text: `Привет, ${user.name}! Чем я могу помочь? 😊`,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages([greeting]);
+      setGreetingSent(true);
+    }
+  }, [greetingSent, messages.length, user.name]);
+
   const uploadImage = async (file: File): Promise<string | null> => {
     const ext = file.name.split('.').pop();
     const path = `${user.id}/${Date.now()}.${ext}`;
@@ -61,11 +72,37 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
       .from('chat-attachments')
       .upload(path, file);
     if (error) return null;
-    // Use signed URL for private bucket (1 hour expiry)
     const { data: urlData } = await supabase.storage
       .from('chat-attachments')
       .createSignedUrl(path, 3600);
     return urlData?.signedUrl || null;
+  };
+
+  // Detect escalation pattern in AI response and notify admin
+  const checkEscalation = async (aiText: string) => {
+    const escalationMatch = aiText.match(/\[ESCALATE:\s*telegram=(@\S+),\s*problem=(.+?)\]/);
+    if (escalationMatch) {
+      const telegramUsername = escalationMatch[1];
+      const problem = escalationMatch[2];
+      try {
+        const token = (await supabase.auth.getSession()).data.session?.access_token;
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-admin`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userName: user.name,
+            userTelegram: telegramUsername,
+            problem,
+            clientId: (user as any).clientId,
+          }),
+        });
+      } catch (e) {
+        console.error('Failed to notify admin:', e);
+      }
+    }
   };
 
   const handleSend = async () => {
@@ -76,7 +113,6 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
     if (isListening) stopListening();
     setError(null);
 
-    // Upload image if attached
     let imageUrl: string | undefined;
     if (attachedImage) {
       imageUrl = (await uploadImage(attachedImage.file)) || undefined;
@@ -94,20 +130,18 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
     setInput('');
     setIsTyping(true);
 
-    // Create session if needed
     let sessionId = currentSessionId;
     if (!sessionId) {
       sessionId = await createSession(subject, selectedMode);
       setCurrentSessionId(sessionId);
     }
 
-    // Save user message
     if (sessionId) {
       await saveMessage(sessionId, userMessage, imageUrl);
     }
 
     const apiMessages = [
-      ...messages.map(m => ({
+      ...messages.filter(m => m.text !== `Привет, ${user.name}! Чем я могу помочь? 😊`).map(m => ({
         role: m.role === 'model' ? ('assistant' as const) : ('user' as const),
         content: m.text,
       })),
@@ -137,14 +171,16 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
       },
       onDone: () => {
         setIsTyping(false);
-        // Auto-speak for preschoolers
         if (isPreschool && currentAiResponse) {
           speak(currentAiResponse);
         }
-        // Save AI message
         if (sessionId && currentAiResponse) {
           const aiMsg: ChatMessage = { role: 'model', text: currentAiResponse, timestamp: new Date().toISOString() };
           saveMessage(sessionId, aiMsg);
+        }
+        // Check for escalation pattern
+        if (subject === 'Support' && currentAiResponse) {
+          checkEscalation(currentAiResponse);
         }
       },
       onError: (errMsg) => {
@@ -155,17 +191,6 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
         }
       },
     });
-  };
-
-  const startWithMode = (mId: string) => {
-    setSelectedMode(mId);
-    setShowModes(false);
-
-    const modeName = LEARNING_MODES.find(m => m.id === mId)?.name;
-    const initialPrompt = isPreschool
-      ? `Привет! Давай заниматься в режиме "${modeName}"!`
-      : `Привет! Я хочу изучить тему в режиме "${modeName}". С чего начнем?`;
-    setInput(initialPrompt);
   };
 
   const handleMicToggle = () => {
@@ -202,15 +227,14 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
     const msgs = await loadSessionMessages(session.id);
     setMessages(msgs);
     setCurrentSessionId(session.id);
-    setSelectedMode(session.mode);
-    setShowModes(false);
+    setGreetingSent(true);
     setShowHistory(false);
   };
 
   const handleNewChat = () => {
     setMessages([]);
     setCurrentSessionId(null);
-    setShowModes(true);
+    setGreetingSent(false);
     setShowHistory(false);
   };
 
@@ -239,10 +263,6 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
       />
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-        {showModes && (
-          <ModeSelector onSelect={startWithMode} />
-        )}
-
         <ChatMessages
           messages={messages}
           isTyping={isTyping}
@@ -252,35 +272,31 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
         />
       </div>
 
-      {!showModes && (
-        <>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-          <ChatInput
-            input={input}
-            setInput={setInput}
-            onSend={handleSend}
-            isTyping={isTyping}
-            isListening={isListening}
-            onMicToggle={handleMicToggle}
-            micSupported={micSupported}
-            isPreschool={isPreschool}
-            onAttachFile={handleAttachFile}
-            attachedImage={attachedImage}
-            onRemoveAttachment={() => {
-              if (attachedImage) {
-                URL.revokeObjectURL(attachedImage.preview);
-                setAttachedImage(null);
-              }
-            }}
-          />
-        </>
-      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      <ChatInput
+        input={input}
+        setInput={setInput}
+        onSend={handleSend}
+        isTyping={isTyping}
+        isListening={isListening}
+        onMicToggle={handleMicToggle}
+        micSupported={micSupported}
+        isPreschool={isPreschool}
+        onAttachFile={handleAttachFile}
+        attachedImage={attachedImage}
+        onRemoveAttachment={() => {
+          if (attachedImage) {
+            URL.revokeObjectURL(attachedImage.preview);
+            setAttachedImage(null);
+          }
+        }}
+      />
     </div>
   );
 };

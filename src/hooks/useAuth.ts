@@ -7,6 +7,8 @@ interface ProfileData {
   user_type: string;
   class_level: number | null;
   learning_goal: string | null;
+  username: string | null;
+  client_id: number | null;
 }
 
 export function useAuth() {
@@ -19,7 +21,7 @@ export function useAuth() {
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('name, user_type, class_level, learning_goal')
+      .select('name, user_type, class_level, learning_goal, username, client_id')
       .eq('user_id', userId)
       .maybeSingle();
 
