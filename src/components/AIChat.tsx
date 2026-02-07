@@ -31,7 +31,7 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const isPreschool = user.type === 'PRESCHOOLER';
-  const { speak, stop: stopSpeaking } = useSpeechSynthesis();
+  const { speak, stop: stopSpeaking, isSpeaking } = useSpeechSynthesis();
   const { isListening, transcript, startListening, stopListening, isSupported: micSupported } = useSpeechRecognition();
   const {
     sessions, loading: historyLoading, searchQuery, setSearchQuery,
@@ -171,7 +171,8 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
       },
       onDone: () => {
         setIsTyping(false);
-        if (isPreschool && currentAiResponse) {
+        // Auto-speak AI responses for all users
+        if (currentAiResponse) {
           speak(currentAiResponse);
         }
         if (sessionId && currentAiResponse) {
@@ -199,7 +200,11 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
   };
 
   const handleSpeakMessage = (text: string) => {
-    speak(text);
+    if (isSpeaking) {
+      stopSpeaking();
+    } else {
+      speak(text);
+    }
   };
 
   const handleAttachFile = () => {
@@ -269,6 +274,7 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
           error={error}
           isPreschool={isPreschool}
           onSpeakMessage={handleSpeakMessage}
+          isSpeaking={isSpeaking}
         />
       </div>
 

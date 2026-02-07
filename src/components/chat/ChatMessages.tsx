@@ -1,5 +1,7 @@
 import React from 'react';
 import { ChatMessage } from '../../types';
+import WritingAnimation from './WritingAnimation';
+import MathVisualization from './MathVisualization';
 
 function cleanDisplayText(text: string): string {
   return text
@@ -26,15 +28,77 @@ function cleanDisplayText(text: string): string {
     .trim();
 }
 
+type Segment = 
+  | { type: 'text'; content: string }
+  | { type: 'write'; character: string }
+  | { type: 'math'; expression: string };
+
+function parseVisualContent(text: string): Segment[] {
+  const segments: Segment[] = [];
+  const regex = /\[WRITE:(.+?)\]|\[MATH:(.+?)\]/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const textBefore = text.slice(lastIndex, match.index);
+      if (textBefore.trim()) {
+        segments.push({ type: 'text', content: textBefore });
+      }
+    }
+
+    if (match[1]) {
+      segments.push({ type: 'write', character: match[1] });
+    } else if (match[2]) {
+      segments.push({ type: 'math', expression: match[2] });
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    const remaining = text.slice(lastIndex);
+    if (remaining.trim()) {
+      segments.push({ type: 'text', content: remaining });
+    }
+  }
+
+  return segments.length > 0 ? segments : [{ type: 'text', content: text }];
+}
+
+function RichContent({ text }: { text: string }) {
+  const segments = parseVisualContent(text);
+
+  return (
+    <>
+      {segments.map((seg, i) => {
+        switch (seg.type) {
+          case 'write':
+            return <WritingAnimation key={i} character={seg.character} />;
+          case 'math':
+            return <MathVisualization key={i} expression={seg.expression} />;
+          case 'text':
+            return (
+              <p key={i} className="text-sm whitespace-pre-wrap leading-relaxed">
+                {cleanDisplayText(seg.content)}
+              </p>
+            );
+        }
+      })}
+    </>
+  );
+}
+
 interface Props {
   messages: ChatMessage[];
   isTyping: boolean;
   error: string | null;
   isPreschool: boolean;
   onSpeakMessage: (text: string) => void;
+  isSpeaking?: boolean;
 }
 
-const ChatMessages: React.FC<Props> = ({ messages, isTyping, error, isPreschool, onSpeakMessage }) => (
+const ChatMessages: React.FC<Props> = ({ messages, isTyping, error, isPreschool, onSpeakMessage, isSpeaking }) => (
   <>
     {messages.map((m, i) => (
       <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-slide-in`}>
@@ -47,7 +111,14 @@ const ChatMessages: React.FC<Props> = ({ messages, isTyping, error, isPreschool,
           {m.imageUrl && (
             <img src={m.imageUrl} alt="Прикреплено" className="max-w-full rounded-xl mb-2" />
           )}
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.role === 'model' ? cleanDisplayText(m.text) : m.text}</p>
+
+          {/* Rich content for AI messages, plain text for user */}
+          {m.role === 'model' ? (
+            <RichContent text={m.text} />
+          ) : (
+            <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.text}</p>
+          )}
+
           <div className="flex items-center justify-between mt-1 gap-2">
             <span className="text-[10px] opacity-50">
               {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -55,11 +126,17 @@ const ChatMessages: React.FC<Props> = ({ messages, isTyping, error, isPreschool,
             {m.role === 'model' && m.text && (
               <button
                 onClick={() => onSpeakMessage(m.text)}
-                className="p-1 rounded-full transition-colors text-slate-400 hover:text-blue-600"
-                title="Озвучить"
+                className={`p-1 rounded-full transition-colors ${
+                  isSpeaking ? 'text-blue-600 animate-pulse' : 'text-slate-400 hover:text-blue-600'
+                }`}
+                title={isSpeaking ? 'Остановить' : 'Озвучить'}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072M17.95 6.05a8 8 0 010 11.9M6.5 8.788v6.424a.5.5 0 00.757.429l4.964-3.212a.5.5 0 000-.858L7.257 8.36a.5.5 0 00-.757.429z" />
+                  {isSpeaking ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z M10 9v6 M14 9v6" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072M17.95 6.05a8 8 0 010 11.9M6.5 8.788v6.424a.5.5 0 00.757.429l4.964-3.212a.5.5 0 000-.858L7.257 8.36a.5.5 0 00-.757.429z" />
+                  )}
                 </svg>
               </button>
             )}
