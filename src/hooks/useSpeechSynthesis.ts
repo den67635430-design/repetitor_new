@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface UseSpeechSynthesisReturn {
   speak: (text: string) => void;
@@ -54,6 +55,14 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
     setIsSpeaking(true);
 
     try {
+      // Get user's auth token for authenticated request
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        console.error('No auth session for TTS');
+        setIsSpeaking(false);
+        return;
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
         {
@@ -61,7 +70,7 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
           headers: {
             'Content-Type': 'application/json',
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({ text: cleanText }),
           signal: abortController.signal,
