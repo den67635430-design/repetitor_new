@@ -1,6 +1,6 @@
-
 import React from 'react';
 import { UserProfile, SubscriptionInfo, SubscriptionStatus } from '../types';
+import { useTrial } from '@/hooks/useTrial';
 
 interface Props {
   user: UserProfile;
@@ -12,6 +12,8 @@ interface Props {
 }
 
 const Home: React.FC<Props> = ({ user, sub, testMode, isAdmin, onNavigate, onSelectSubject }) => {
+  const { trial, startTrial } = useTrial(user.id);
+
   return (
     <div className="p-5 space-y-6 animate-slide-in">
       {/* Welcome Section */}
@@ -27,16 +29,17 @@ const Home: React.FC<Props> = ({ user, sub, testMode, isAdmin, onNavigate, onSel
         </div>
       </section>
 
-      {/* Subscription Status Card */}
+      {/* Subscription / Trial Status Card */}
       <section className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-5 text-white shadow-xl shadow-blue-200">
         <div className="flex justify-between items-start mb-4">
           <div>
             <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider mb-1">Ваш статус</p>
             <h3 className="text-lg font-bold">
               {testMode ? 'Тестовый доступ активен' : 
-               sub.status === SubscriptionStatus.NONE ? 'Пробный период 10 дней' : 
-               sub.status === SubscriptionStatus.TRIAL_ACTIVE ? 'Пробный период' : 
-               sub.status === SubscriptionStatus.SUBSCRIBED_ACTIVE ? 'Подписка активна' : 'Подписка истекла'}
+               sub.status === SubscriptionStatus.SUBSCRIBED_ACTIVE ? 'Подписка активна' :
+               trial.isTrialActive ? `Пробный период — ${trial.trialDaysLeft} дн.` :
+               trial.hasTrialStarted ? 'Пробный период завершён' :
+               'Попробуйте бесплатно!'}
             </h3>
           </div>
           <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md">
@@ -44,14 +47,22 @@ const Home: React.FC<Props> = ({ user, sub, testMode, isAdmin, onNavigate, onSel
           </div>
         </div>
         
-        <button 
-          onClick={() => onNavigate('pricing')}
-          className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all"
-        >
-          Активировать полный доступ
-        </button>
+        {!trial.hasTrialStarted && sub.status !== SubscriptionStatus.SUBSCRIBED_ACTIVE ? (
+          <button 
+            onClick={startTrial}
+            className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all"
+          >
+            🎁 Начать бесплатно — 10 дней
+          </button>
+        ) : (
+          <button 
+            onClick={() => onNavigate('pricing')}
+            className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all"
+          >
+            {sub.status === SubscriptionStatus.SUBSCRIBED_ACTIVE ? 'Управление подпиской' : 'Активировать полный доступ'}
+          </button>
+        )}
       </section>
-
       {/* Main Grid */}
       <section className="grid grid-cols-2 gap-4">
         <MenuButton 

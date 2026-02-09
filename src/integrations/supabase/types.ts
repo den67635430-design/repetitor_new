@@ -194,6 +194,9 @@ export type Database = {
           id: string
           learning_goal: string | null
           name: string
+          subscription_agreement_accepted_at: string | null
+          trial_expires_at: string | null
+          trial_started_at: string | null
           updated_at: string
           user_id: string
           user_type: string
@@ -206,6 +209,9 @@ export type Database = {
           id?: string
           learning_goal?: string | null
           name?: string
+          subscription_agreement_accepted_at?: string | null
+          trial_expires_at?: string | null
+          trial_started_at?: string | null
           updated_at?: string
           user_id: string
           user_type?: string
@@ -218,6 +224,9 @@ export type Database = {
           id?: string
           learning_goal?: string | null
           name?: string
+          subscription_agreement_accepted_at?: string | null
+          trial_expires_at?: string | null
+          trial_started_at?: string | null
           updated_at?: string
           user_id?: string
           user_type?: string
