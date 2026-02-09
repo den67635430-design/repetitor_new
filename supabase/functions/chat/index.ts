@@ -436,40 +436,82 @@ serve(async (req) => {
 
     console.log("Calling Google Gemini API for user:", userId, "web context:", webContext ? "yes" : "no");
 
-    // Use Google Gemini's OpenAI-compatible endpoint
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${GEMINI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gemini-2.5-flash",
-          messages: [
-            { role: "system", content: fullSystemPrompt },
-            ...messages,
-          ],
-          stream: true,
-        }),
+    const chatMessages = [
+      { role: "system", content: fullSystemPrompt },
+      ...messages,
+    ];
+
+    // Try Google Gemini first, with retry on 429
+    let response: Response | null = null;
+    let geminiOk = false;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      response = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${GEMINI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gemini-2.5-flash",
+            messages: chatMessages,
+            stream: true,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        geminiOk = true;
+        break;
       }
-    );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Google Gemini API error:", response.status, errorText);
+      if (response.status === 429 && attempt === 0) {
+        console.warn("Gemini 429 on attempt 1, retrying after 3s...");
+        await new Promise(r => setTimeout(r, 3000));
+        continue;
+      }
 
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Слишком много запросов к AI. Подождите немного и попробуйте снова." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      break;
+    }
+
+    // Fallback to Lovable AI if Gemini fails
+    if (!geminiOk) {
+      const errorText = response ? await response.text() : "no response";
+      console.error("Gemini failed, falling back to Lovable AI:", response?.status, errorText);
+
+      const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+      if (lovableApiKey) {
+        console.log("Using Lovable AI fallback for user:", userId);
+        const fallbackResponse = await fetch(
+          "https://api.lovable.dev/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${lovableApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: chatMessages,
+              stream: true,
+            }),
+          }
         );
+
+        if (fallbackResponse.ok) {
+          console.log("Lovable AI fallback streaming for user:", userId);
+          return new Response(fallbackResponse.body, {
+            headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+          });
+        }
+        console.error("Lovable AI fallback also failed:", fallbackResponse.status);
       }
 
       return new Response(
-        JSON.stringify({ error: "Сервис временно недоступен" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Сервис временно недоступен. Попробуйте через минуту." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
