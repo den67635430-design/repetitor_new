@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Props {
   onBack: () => void;
@@ -50,7 +52,7 @@ const PLANS = [
       'Проверка домашки',
     ],
     popular: true,
-    cta: 'Начать бесплатно',
+    cta: 'Начать',
   },
   {
     id: 'premium',
@@ -72,6 +74,24 @@ const PLANS = [
 
 const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
   const [isQuarterly, setIsQuarterly] = useState(false);
+  const [processingPlan, setProcessingPlan] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const { subscription, createPayment } = useSubscription(user?.id);
+
+  const handleSelectPlan = async (planId: string) => {
+    setError(null);
+    setProcessingPlan(planId);
+    try {
+      const billingPeriod = isQuarterly ? 'quarterly' : 'monthly';
+      const confirmationUrl = await createPayment(planId, billingPeriod);
+      // Redirect to YooKassa payment page
+      window.location.href = confirmationUrl;
+    } catch (err: any) {
+      setError(err.message || 'Ошибка при создании платежа');
+      setProcessingPlan(null);
+    }
+  };
 
   return (
     <div className="min-h-full bg-slate-50 pb-8">
@@ -84,6 +104,27 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
         </button>
         <h1 className="text-lg font-bold text-slate-900">Тарифы</h1>
       </div>
+
+      {/* Active subscription banner */}
+      {subscription && (
+        <div className="mx-4 mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-emerald-600 text-lg">✅</span>
+            <span className="font-bold text-emerald-800 text-sm">Активная подписка</span>
+          </div>
+          <p className="text-emerald-700 text-xs">
+            Тариф «{PLANS.find(p => p.id === subscription.plan_id)?.name || subscription.plan_id}» 
+            — до {new Date(subscription.expires_at).toLocaleDateString('ru-RU')}
+          </p>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-2xl">
+          <p className="text-red-700 text-sm">{error}</p>
+        </div>
+      )}
 
       {/* Subtitle */}
       <div className="text-center pt-6 pb-4 px-4">
@@ -125,19 +166,31 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
       <div className="px-4 space-y-4">
         {PLANS.map((plan) => {
           const price = isQuarterly ? plan.quarterlyPrice : plan.monthlyPrice;
+          const isActive = subscription?.plan_id === plan.id && subscription?.status === 'active';
+          const isProcessing = processingPlan === plan.id;
+
           return (
             <div
               key={plan.id}
               className={`relative bg-white rounded-3xl p-6 shadow-sm border-2 transition-all ${
-                plan.popular
-                  ? 'border-blue-500 shadow-lg shadow-blue-100'
-                  : 'border-slate-100'
+                isActive
+                  ? 'border-emerald-400 shadow-lg shadow-emerald-100'
+                  : plan.popular
+                    ? 'border-blue-500 shadow-lg shadow-blue-100'
+                    : 'border-slate-100'
               }`}
             >
-              {plan.popular && (
+              {plan.popular && !isActive && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <span className="bg-gradient-to-r from-amber-400 to-orange-500 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-md flex items-center gap-1">
                     ⭐ Популярный
+                  </span>
+                </div>
+              )}
+              {isActive && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <span className="bg-emerald-500 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-md">
+                    ✅ Ваш тариф
                   </span>
                 </div>
               )}
@@ -157,18 +210,13 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
                   <li key={i} className="flex items-center gap-3">
                     <svg
                       className={`w-5 h-5 flex-shrink-0 ${
-                        plan.popular ? 'text-blue-500' : 'text-slate-400'
+                        isActive ? 'text-emerald-500' : plan.popular ? 'text-blue-500' : 'text-slate-400'
                       }`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2.5"
-                        d="M5 13l4 4L19 7"
-                      />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
                     </svg>
                     <span className="text-sm text-slate-700">{feature}</span>
                   </li>
@@ -176,14 +224,19 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
               </ul>
 
               <button
-                onClick={() => onSelectPlan(plan.id)}
+                onClick={() => !isActive && !isProcessing && handleSelectPlan(plan.id)}
+                disabled={isActive || isProcessing}
                 className={`w-full py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-95 ${
-                  plan.popular
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-200'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  isActive
+                    ? 'bg-emerald-100 text-emerald-700 cursor-default'
+                    : isProcessing
+                      ? 'bg-slate-200 text-slate-400 cursor-wait'
+                      : plan.popular
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-200'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                {plan.cta}
+                {isActive ? 'Активен' : isProcessing ? 'Перенаправление...' : plan.cta}
               </button>
             </div>
           );
@@ -194,7 +247,7 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
       <div className="px-4 mt-8 space-y-3">
         <div className="flex items-center gap-2">
           <span className="text-emerald-500 text-lg">✅</span>
-          <span className="text-xs text-slate-500">Первый месяц бесплатно в тестовом режиме</span>
+          <span className="text-xs text-slate-500">Безопасная оплата через ЮKassa</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-emerald-500 text-lg">✅</span>

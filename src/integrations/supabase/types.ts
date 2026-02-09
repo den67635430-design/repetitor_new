@@ -133,6 +133,59 @@ export type Database = {
         }
         Relationships: []
       }
+      payments: {
+        Row: {
+          amount: number
+          billing_period: string
+          created_at: string
+          currency: string
+          id: string
+          metadata: Json | null
+          plan_id: string
+          status: string
+          subscription_id: string | null
+          updated_at: string
+          user_id: string
+          yookassa_payment_id: string | null
+        }
+        Insert: {
+          amount: number
+          billing_period: string
+          created_at?: string
+          currency?: string
+          id?: string
+          metadata?: Json | null
+          plan_id: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+          user_id: string
+          yookassa_payment_id?: string | null
+        }
+        Update: {
+          amount?: number
+          billing_period?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          metadata?: Json | null
+          plan_id?: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+          user_id?: string
+          yookassa_payment_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           class_level: number | null
@@ -169,6 +222,42 @@ export type Database = {
           user_id?: string
           user_type?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          billing_period: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          plan_id: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          billing_period: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          plan_id: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          billing_period?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          plan_id?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
