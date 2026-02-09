@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile, SubscriptionInfo, SubscriptionStatus, UserType } from '../types';
 import { supabase } from '@/integrations/supabase/client';
+import ChangePassword from './profile/ChangePassword';
 
 interface Props {
   user: UserProfile;
@@ -57,7 +58,6 @@ const Profile: React.FC<Props> = ({ user, sub, onBack, onLogout, onUpdateProfile
             {user.type === 'PRESCHOOLER' ? 'Дошкольник' : `${user.classLevel} класс`}
           </p>
         </div>
-        {/* Username & Client ID */}
         <div className="flex flex-col items-center gap-1 pt-2 border-t border-slate-100">
           {username && (
             <p className="text-xs text-slate-500">
@@ -71,6 +71,9 @@ const Profile: React.FC<Props> = ({ user, sub, onBack, onLogout, onUpdateProfile
           )}
         </div>
       </section>
+
+      {/* Change Password */}
+      <ChangePassword />
 
       {/* Change Type */}
       <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
@@ -124,9 +127,7 @@ const Profile: React.FC<Props> = ({ user, sub, onBack, onLogout, onUpdateProfile
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 {Array.from({ length: 11 }, (_, i) => i + 1).map((n) => (
-                  <option key={n} value={n}>
-                    {n} класс
-                  </option>
+                  <option key={n} value={n}>{n} класс</option>
                 ))}
               </select>
             )}

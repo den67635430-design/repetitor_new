@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useTrial } from '@/hooks/useTrial';
 import { useAuth } from '@/hooks/useAuth';
+import SubscriptionAgreement from './legal/SubscriptionAgreement';
 
 interface Props {
   onBack: () => void;
@@ -14,12 +16,7 @@ const PLANS = [
     subtitle: 'Для малышей 5-7 лет',
     monthlyPrice: 1490,
     quarterlyPrice: 990,
-    features: [
-      'Игровое обучение',
-      'Буквы, цифры, цвета',
-      'Голосовой режим',
-      'Родительский контроль',
-    ],
+    features: ['Игровое обучение', 'Буквы, цифры, цвета', 'Голосовой режим', 'Родительский контроль'],
     popular: false,
     cta: 'Выбрать',
   },
@@ -29,12 +26,7 @@ const PLANS = [
     subtitle: '1-11 класс · 1 предмет',
     monthlyPrice: 1490,
     quarterlyPrice: 990,
-    features: [
-      '1 предмет на выбор',
-      'Безлимитное время',
-      'Голос + текст',
-      'Родительский контроль',
-    ],
+    features: ['1 предмет на выбор', 'Безлимитное время', 'Голос + текст', 'Родительский контроль'],
     popular: false,
     cta: 'Выбрать',
   },
@@ -44,13 +36,7 @@ const PLANS = [
     subtitle: '1-11 класс',
     monthlyPrice: 1990,
     quarterlyPrice: 1330,
-    features: [
-      '3 предмета на выбор',
-      'Безлимитное время',
-      'Голос + текст',
-      'Родительский контроль',
-      'Проверка домашки',
-    ],
+    features: ['3 предмета на выбор', 'Безлимитное время', 'Голос + текст', 'Родительский контроль', 'Проверка домашки'],
     popular: true,
     cta: 'Начать',
   },
@@ -60,13 +46,7 @@ const PLANS = [
     subtitle: 'Всё включено',
     monthlyPrice: 2990,
     quarterlyPrice: 1990,
-    features: [
-      'ВСЕ предметы',
-      'Безлимит',
-      'Все функции',
-      'Приоритетная поддержка',
-      'Подготовка к ЕГЭ/ОГЭ',
-    ],
+    features: ['ВСЕ предметы', 'Безлимит', 'Все функции', 'Приоритетная поддержка', 'Подготовка к ЕГЭ/ОГЭ'],
     popular: false,
     cta: 'Выбрать',
   },
@@ -76,21 +56,33 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
   const [isQuarterly, setIsQuarterly] = useState(false);
   const [processingPlan, setProcessingPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [agreementPlan, setAgreementPlan] = useState<string | null>(null);
   const { user } = useAuth();
   const { subscription, createPayment } = useSubscription(user?.id);
+  const { trial, startTrial } = useTrial(user?.id);
 
-  const handleSelectPlan = async (planId: string) => {
+  const handleSelectPlan = (planId: string) => {
     setError(null);
-    setProcessingPlan(planId);
+    // Show agreement modal before proceeding to payment
+    setAgreementPlan(planId);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!agreementPlan) return;
+    setProcessingPlan(agreementPlan);
+    setAgreementPlan(null);
     try {
       const billingPeriod = isQuarterly ? 'quarterly' : 'monthly';
-      const confirmationUrl = await createPayment(planId, billingPeriod);
-      // Redirect to YooKassa payment page
+      const confirmationUrl = await createPayment(agreementPlan, billingPeriod);
       window.location.href = confirmationUrl;
     } catch (err: any) {
       setError(err.message || 'Ошибка при создании платежа');
       setProcessingPlan(null);
     }
+  };
+
+  const handleStartTrial = async () => {
+    await startTrial();
   };
 
   return (
@@ -104,6 +96,50 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
         </button>
         <h1 className="text-lg font-bold text-slate-900">Тарифы</h1>
       </div>
+
+      {/* Trial Banner */}
+      {!subscription && (
+        <div className="mx-4 mt-4">
+          {!trial.hasTrialStarted ? (
+            <div className="p-5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl text-white shadow-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-2xl">🎁</span>
+                <h3 className="font-bold text-lg">Попробуйте бесплатно!</h3>
+              </div>
+              <p className="text-blue-100 text-sm mb-4">
+                10 дней бесплатного доступа ко всем функциям. Без привязки карты.
+              </p>
+              <button
+                onClick={handleStartTrial}
+                className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all"
+              >
+                Начать бесплатно — 10 дней
+              </button>
+            </div>
+          ) : trial.isTrialActive ? (
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-emerald-600 text-lg">✅</span>
+                <span className="font-bold text-emerald-800 text-sm">Пробный период активен</span>
+              </div>
+              <p className="text-emerald-700 text-xs">
+                Осталось {trial.trialDaysLeft} {trial.trialDaysLeft === 1 ? 'день' : trial.trialDaysLeft < 5 ? 'дня' : 'дней'}
+                {trial.trialExpiresAt && ` — до ${new Date(trial.trialExpiresAt).toLocaleDateString('ru-RU')}`}
+              </p>
+            </div>
+          ) : (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-amber-600 text-lg">⏰</span>
+                <span className="font-bold text-amber-800 text-sm">Пробный период завершён</span>
+              </div>
+              <p className="text-amber-700 text-xs">
+                Оформите подписку, чтобы продолжить обучение
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Active subscription banner */}
       {subscription && (
@@ -128,9 +164,7 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
 
       {/* Subtitle */}
       <div className="text-center pt-6 pb-4 px-4">
-        <p className="text-slate-500 text-sm">
-          Сэкономьте до 60% при оплате за 3 месяца
-        </p>
+        <p className="text-slate-500 text-sm">Сэкономьте до 60% при оплате за 3 месяца</p>
       </div>
 
       {/* Toggle */}
@@ -139,9 +173,7 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
           <button
             onClick={() => setIsQuarterly(false)}
             className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
-              !isQuarterly
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-slate-500 hover:text-slate-700'
+              !isQuarterly ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             Помесячно
@@ -149,15 +181,11 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
           <button
             onClick={() => setIsQuarterly(true)}
             className={`px-5 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${
-              isQuarterly
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-slate-500 hover:text-slate-700'
+              isQuarterly ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             От 3 месяцев
-            <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-              -33%
-            </span>
+            <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">-33%</span>
           </button>
         </div>
       </div>
@@ -212,9 +240,7 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
                       className={`w-5 h-5 flex-shrink-0 ${
                         isActive ? 'text-emerald-500' : plan.popular ? 'text-blue-500' : 'text-slate-400'
                       }`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
                     </svg>
@@ -251,13 +277,23 @@ const PricingPage: React.FC<Props> = ({ onBack, onSelectPlan }) => {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-emerald-500 text-lg">✅</span>
-          <span className="text-xs text-slate-500">Отмена в любой момент</span>
+          <span className="text-xs text-slate-500">Возврат в течение 3 дней при объективных причинах</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-emerald-500 text-lg">✅</span>
-          <span className="text-xs text-slate-500">Возврат денег в течение 14 дней</span>
+          <span className="text-xs text-slate-500">Полная документация доступна перед оплатой</span>
         </div>
       </div>
+
+      {/* Subscription Agreement Modal */}
+      {agreementPlan && (
+        <SubscriptionAgreement
+          planName={PLANS.find(p => p.id === agreementPlan)?.name || agreementPlan}
+          onAccept={handleConfirmPayment}
+          onCancel={() => setAgreementPlan(null)}
+          loading={!!processingPlan}
+        />
+      )}
     </div>
   );
 };
