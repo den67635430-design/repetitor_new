@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.elevenlabs-tts]
 verify_jwt = false
+
+[functions.create-payment]
+verify_jwt = false
+
+[functions.yookassa-webhook]
+verify_jwt = false
