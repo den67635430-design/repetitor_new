@@ -123,9 +123,6 @@ const App: React.FC = () => {
     learningGoal: profile.learning_goal,
   };
 
-  // Show prices only if NOT in test mode AND user doesn't have active subscription
-  const showPrices = !testMode && sub.status !== SubscriptionStatus.SUBSCRIBED_ACTIVE;
-
   const renderScreen = () => {
     switch (currentScreen) {
       case 'home':
@@ -135,7 +132,13 @@ const App: React.FC = () => {
             sub={sub}
             testMode={testMode}
             isAdmin={isAdmin}
-            onNavigate={setCurrentScreen as any}
+            onNavigate={(screen: string) => {
+              if (screen === 'logout') {
+                handleLogout();
+              } else {
+                (setCurrentScreen as any)(screen);
+              }
+            }}
             onSelectSubject={setSelectedSubject}
           />
         );

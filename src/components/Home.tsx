@@ -12,15 +12,19 @@ interface Props {
 }
 
 const Home: React.FC<Props> = ({ user, sub, testMode, isAdmin, onNavigate, onSelectSubject }) => {
-  const isPreschool = user.type === 'PRESCHOOLER';
-  const showPrices = !testMode && sub.status !== SubscriptionStatus.SUBSCRIBED_ACTIVE;
-
   return (
     <div className="p-5 space-y-6 animate-slide-in">
       {/* Welcome Section */}
-      <section className="space-y-1">
-        <h2 className="text-2xl font-extrabold text-slate-900">Привет, {user.name}! 👋</h2>
-        <p className="text-slate-500">Готовы к новым знаниям сегодня?</p>
+      <section className="flex items-center gap-4">
+        <button onClick={() => onNavigate('logout')} className="p-2 bg-white rounded-xl shadow-sm border text-slate-600">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div>
+          <h2 className="text-2xl font-extrabold text-slate-900">Привет, {user.name}! 👋</h2>
+          <p className="text-slate-500">Готовы к новым знаниям сегодня?</p>
+        </div>
       </section>
 
       {/* Subscription Status Card */}
@@ -40,14 +44,12 @@ const Home: React.FC<Props> = ({ user, sub, testMode, isAdmin, onNavigate, onSel
           </div>
         </div>
         
-        {showPrices && (
-          <button 
-            onClick={() => onNavigate('pricing')}
-            className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all"
-          >
-            Активировать полный доступ
-          </button>
-        )}
+        <button 
+          onClick={() => onNavigate('pricing')}
+          className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all"
+        >
+          Активировать полный доступ
+        </button>
       </section>
 
       {/* Main Grid */}
