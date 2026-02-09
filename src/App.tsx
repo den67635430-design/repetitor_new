@@ -12,8 +12,9 @@ import AIChat from './components/AIChat';
 import GameTrainer from './components/GameTrainer';
 import AdminDashboard from './components/AdminDashboard';
 import Profile from './components/Profile';
+import PricingPage from './components/PricingPage';
 
-type Screen = 'welcome' | 'auth' | 'setup' | 'home' | 'subjects' | 'preschool' | 'chat' | 'game' | 'admin' | 'profile' | 'exams';
+type Screen = 'welcome' | 'auth' | 'setup' | 'home' | 'subjects' | 'preschool' | 'chat' | 'game' | 'admin' | 'profile' | 'exams' | 'pricing';
 
 const App: React.FC = () => {
   const { user, profile, isAdmin, loading, signOut, hasProfile, refreshProfile } = useAuth();
@@ -168,6 +169,16 @@ const App: React.FC = () => {
             subject={selectedSubject || 'General'}
             mode={selectedMode || 'explain'}
             onBack={() => setCurrentScreen('home')}
+          />
+        );
+      case 'pricing':
+        return (
+          <PricingPage
+            onBack={() => setCurrentScreen('home')}
+            onSelectPlan={(planId) => {
+              console.log('Selected plan:', planId);
+              // TODO: integrate with YooKassa payment
+            }}
           />
         );
       case 'game':

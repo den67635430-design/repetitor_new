@@ -41,7 +41,10 @@ const Home: React.FC<Props> = ({ user, sub, testMode, isAdmin, onNavigate, onSel
         </div>
         
         {showPrices && (
-          <button className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all">
+          <button 
+            onClick={() => onNavigate('pricing')}
+            className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all"
+          >
             Активировать полный доступ
           </button>
         )}
