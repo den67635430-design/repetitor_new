@@ -399,9 +399,9 @@ serve(async (req) => {
 
     const { messages, userType, subject, mode, classLevel } = validated;
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      console.error("GOOGLE_GEMINI_API_KEY is not configured");
       return new Response(
         JSON.stringify({ error: "Сервис временно недоступен" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -423,18 +423,19 @@ serve(async (req) => {
 
     const fullSystemPrompt = systemInstruction + webContext;
 
-    console.log("Calling AI Gateway for user:", userId, "web context:", webContext ? "yes" : "no");
+    console.log("Calling Google Gemini API for user:", userId, "web context:", webContext ? "yes" : "no");
 
+    // Use Google Gemini's OpenAI-compatible endpoint
     const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${GEMINI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: "gemini-2.5-flash",
           messages: [
             { role: "system", content: fullSystemPrompt },
             ...messages,
@@ -446,18 +447,12 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("Google Gemini API error:", response.status, errorText);
 
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Слишком много запросов. Подождите немного и попробуйте снова." }),
+          JSON.stringify({ error: "Слишком много запросов к AI. Подождите немного и попробуйте снова." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Сервис временно недоступен." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
