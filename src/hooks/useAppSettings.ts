@@ -9,10 +9,10 @@ export function useAppSettings() {
   useEffect(() => {
     const fetchSettings = async () => {
       const { data } = await supabase
-        .from('app_settings')
+        .from('safe_app_settings' as any)
         .select('value')
         .eq('key', 'test_mode')
-        .maybeSingle();
+        .maybeSingle() as { data: { value: any } | null };
 
       if (data?.value && typeof data.value === 'object' && 'enabled' in data.value) {
         setTestMode((data.value as { enabled: boolean }).enabled);
