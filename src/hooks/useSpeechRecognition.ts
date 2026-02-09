@@ -8,9 +8,8 @@ interface UseSpeechRecognitionReturn {
   isSupported: boolean;
 }
 
-// Extend window for SpeechRecognition
 interface SpeechRecognitionEvent {
-  results: { [index: number]: { [index: number]: { transcript: string } } };
+  results: SpeechRecognitionResultList;
   resultIndex: number;
 }
 
@@ -25,28 +24,26 @@ export function useSpeechRecognition(lang = 'ru-RU'): UseSpeechRecognitionReturn
   const startListening = useCallback(() => {
     if (!isSupported) return;
 
+    // Stop any previous instance
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+      recognitionRef.current = null;
+    }
+
     const recognition = new SpeechRecognition();
     recognition.lang = lang;
     recognition.interimResults = true;
-    recognition.continuous = true;
-
-    let finalTranscript = '';
+    recognition.continuous = false; // Single utterance to avoid duplication
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interimTranscript = '';
-      for (let i = event.resultIndex; i < Object.keys(event.results).length; i++) {
+      let fullTranscript = '';
+      for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
-        if (result && result[0]) {
-          const transcript = result[0].transcript;
-          // Check if final
-          if ((result as any).isFinal) {
-            finalTranscript += transcript;
-          } else {
-            interimTranscript += transcript;
-          }
+        if (result?.[0]) {
+          fullTranscript += result[0].transcript;
         }
       }
-      setTranscript(finalTranscript + interimTranscript);
+      setTranscript(fullTranscript);
     };
 
     recognition.onend = () => {
@@ -54,14 +51,16 @@ export function useSpeechRecognition(lang = 'ru-RU'): UseSpeechRecognitionReturn
     };
 
     recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
+      if (event.error !== 'aborted') {
+        console.error('Speech recognition error:', event.error);
+      }
       setIsListening(false);
     };
 
     recognitionRef.current = recognition;
+    setTranscript('');
     recognition.start();
     setIsListening(true);
-    setTranscript('');
   }, [isSupported, lang]);
 
   const stopListening = useCallback(() => {

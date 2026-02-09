@@ -59,8 +59,8 @@ serve(async (req) => {
     const cleanText = text.trim().substring(0, 5000);
     console.log("ElevenLabs TTS request:", cleanText.substring(0, 60));
 
-    // Using "Laura" voice - natural female voice, great for Russian
-    const voiceId = "FGY2WhTYpPnrIDTdsKH5";
+    // Using "Alice" voice - warm, gentle, natural female voice for Russian
+    const voiceId = "Xb7hH8MSUJpSbSDYk0k2";
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
@@ -74,11 +74,11 @@ serve(async (req) => {
           text: cleanText,
           model_id: "eleven_multilingual_v2",
           voice_settings: {
-            stability: 0.45,
-            similarity_boost: 0.8,
-            style: 0.55,
+            stability: 0.35,
+            similarity_boost: 0.85,
+            style: 0.7,
             use_speaker_boost: true,
-            speed: 0.95,
+            speed: 0.9,
           },
         }),
       }
