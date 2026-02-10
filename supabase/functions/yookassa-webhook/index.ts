@@ -51,6 +51,37 @@ serve(async (req) => {
       return new Response("OK", { status: 200 });
     }
 
+    // Verify payment with YooKassa API (fetch-before-process pattern)
+    const shopId = Deno.env.get("YOOKASSA_SHOP_ID") ?? "";
+    const secretKey = Deno.env.get("YOOKASSA_SECRET_KEY") ?? "";
+
+    if (shopId && secretKey) {
+      const verifyUrl = event?.startsWith("refund.")
+        ? `https://api.yookassa.ru/v3/refunds/${paymentData.id}`
+        : `https://api.yookassa.ru/v3/payments/${paymentData.id}`;
+
+      const verifyRes = await fetch(verifyUrl, {
+        headers: {
+          "Authorization": `Basic ${btoa(`${shopId}:${secretKey}`)}`,
+        },
+      });
+
+      if (!verifyRes.ok) {
+        console.error(`YooKassa verification failed: ${verifyRes.status}`);
+        await verifyRes.text();
+        return new Response("Forbidden", { status: 403 });
+      }
+
+      const verified = await verifyRes.json();
+      if (verified.status !== paymentData.status) {
+        console.error(`Status mismatch: webhook=${paymentData.status}, API=${verified.status}`);
+        return new Response("Forbidden", { status: 403 });
+      }
+    } else {
+      console.error("Missing YooKassa credentials for verification");
+      return new Response("Internal error", { status: 500 });
+    }
+
     // Validate metadata fields
     const { payment_id, user_id, plan_id, billing_period } = paymentData.metadata || {};
 
