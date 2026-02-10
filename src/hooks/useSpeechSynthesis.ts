@@ -55,71 +55,77 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
     setIsSpeaking(false);
   }, []);
 
-  const speak = useCallback(async (text: string, voiceId?: string) => {
+  const speak = useCallback((text: string, voiceId?: string): Promise<void> => {
     // Stop any current speech
     stop();
 
     const cleanText = cleanTextForSpeech(text);
-    if (!cleanText) return;
+    if (!cleanText) return Promise.resolve();
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
     setIsSpeaking(true);
 
-    try {
-      // Get user's auth token for authenticated request
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        console.error('No auth session for TTS');
-        setIsSpeaking(false);
-        return;
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ text: cleanText, voiceId: voiceId || 'female' }),
-          signal: abortController.signal,
+    return new Promise<void>(async (resolve) => {
+      try {
+        // Get user's auth token for authenticated request
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          console.error('No auth session for TTS');
+          setIsSpeaking(false);
+          resolve();
+          return;
         }
-      );
 
-      if (!response.ok) {
-        throw new Error(`TTS request failed: ${response.status}`);
-      }
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ text: cleanText, voiceId: voiceId || 'female' }),
+            signal: abortController.signal,
+          }
+        );
 
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
+        if (!response.ok) {
+          throw new Error(`TTS request failed: ${response.status}`);
+        }
 
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          setIsSpeaking(false);
+          audioRef.current = null;
+          resolve();
+        };
+
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          setIsSpeaking(false);
+          audioRef.current = null;
+          resolve();
+        };
+
+        audioRef.current = audio;
+        await audio.play();
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          resolve();
+          return;
+        }
+        console.error('ElevenLabs TTS error:', err);
         setIsSpeaking(false);
-        audioRef.current = null;
-      };
-
-      audio.onerror = () => {
-        URL.revokeObjectURL(audioUrl);
-        setIsSpeaking(false);
-        audioRef.current = null;
-      };
-
-      audioRef.current = audio;
-      await audio.play();
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        // Intentional cancellation — ignore
-        return;
+        resolve();
       }
-      console.error('ElevenLabs TTS error:', err);
-      setIsSpeaking(false);
-    }
+    });
   }, [stop]);
 
   return {

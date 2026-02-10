@@ -38,7 +38,7 @@ const GameTrainer: React.FC<Props> = ({ onBack }) => {
     setTimeout(() => nextQuestion(gameId), 100);
   }, [nextQuestion]);
 
-  const handleAnswer = useCallback((val: number | string) => {
+  const handleAnswer = useCallback(async (val: number | string) => {
     if (feedback || !question) return;
 
     const correct = val === question.answer;
@@ -46,28 +46,27 @@ const GameTrainer: React.FC<Props> = ({ onBack }) => {
 
     if (correct) {
       setScore(s => s + 1);
-      speak(pickRandom(CORRECT_RESPONSES));
+      await speak(pickRandom(CORRECT_RESPONSES));
     } else {
       const resp = pickRandom(WRONG_RESPONSES);
-      speak(resp(question.answer));
+      await speak(resp(question.answer));
     }
 
-    setTimeout(() => {
-      if (currentRound < TOTAL_ROUNDS) {
-        setCurrentRound(r => r + 1);
-        nextQuestion(selectedGame);
+    // Speech finished — now advance
+    if (currentRound < TOTAL_ROUNDS) {
+      setCurrentRound(r => r + 1);
+      nextQuestion(selectedGame);
+    } else {
+      setGameState('results');
+      const finalScore = correct ? score + 1 : score;
+      if (finalScore >= 4) {
+        speak(`Ура! Ты настоящий молодец! ${finalScore} из пяти правильных ответов! Так держать!`);
+      } else if (finalScore >= 2) {
+        speak(`Хорошо! ${finalScore} из пяти. Давай попробуем ещё раз и будет ещё лучше!`);
       } else {
-        setGameState('results');
-        const finalScore = correct ? score + 1 : score;
-        if (finalScore >= 4) {
-          speak(`Ура! Ты настоящий молодец! ${finalScore} из пяти правильных ответов! Так держать!`);
-        } else if (finalScore >= 2) {
-          speak(`Хорошо! ${finalScore} из пяти. Давай попробуем ещё раз и будет ещё лучше!`);
-        } else {
-          speak(`Ничего страшного! ${finalScore} из пяти. Давай потренируемся ещё!`);
-        }
+        speak(`Ничего страшного! ${finalScore} из пяти. Давай потренируемся ещё!`);
       }
-    }, 1800);
+    }
   }, [feedback, question, currentRound, score, selectedGame, nextQuestion, speak]);
 
   const getOptionStyle = (opt: number | string) => {
