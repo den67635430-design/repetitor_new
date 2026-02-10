@@ -42,7 +42,7 @@ function sanitizeString(text: string, maxLength: number): string {
 }
 
 interface ValidatedInput {
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  messages: Array<{ role: "user" | "assistant"; content: string; imageUrl?: string }>;
   userType: string;
   subject: string;
   mode: string;
@@ -64,15 +64,16 @@ function validateInput(body: unknown): ValidatedInput | string {
     return `Too many messages (max ${MAX_MESSAGES})`;
   }
 
-  const validatedMessages: Array<{ role: "user" | "assistant"; content: string }> = [];
+  const validatedMessages: Array<{ role: "user" | "assistant"; content: string; imageUrl?: string }> = [];
   for (const msg of messages) {
     if (!msg || typeof msg !== "object") return "Invalid message format";
-    const { role, content } = msg as Record<string, unknown>;
+    const { role, content, imageUrl } = msg as Record<string, unknown>;
     if (role !== "user" && role !== "assistant") return "Invalid message role";
     if (typeof content !== "string" || content.trim().length === 0) return "Message content must be a non-empty string";
     validatedMessages.push({
       role: role as "user" | "assistant",
       content: sanitizeString(content, MAX_MESSAGE_LENGTH),
+      ...(typeof imageUrl === "string" && imageUrl.startsWith("http") ? { imageUrl } : {}),
     });
   }
 
@@ -456,9 +457,25 @@ serve(async (req) => {
 
     console.log("Calling Google Gemini API for user:", userId, "web context:", webContext ? "yes" : "no");
 
+    // Build messages with multimodal support for images
     const chatMessages = [
       { role: "system", content: fullSystemPrompt },
-      ...messages,
+      ...messages.map((msg) => {
+        if (msg.imageUrl && msg.role === "user") {
+          // Multimodal message with image for Gemini
+          return {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: msg.content + "\n\n[Пользователь прикрепил изображение. Внимательно рассмотри его и ответь на вопрос. Опиши что видишь на изображении, если пользователь просит помочь с заданием — помоги разобрать его.]" },
+              { type: "image_url" as const, image_url: { url: msg.imageUrl } },
+            ],
+          };
+        }
+        return {
+          role: msg.role === "user" ? ("user" as const) : ("assistant" as const),
+          content: msg.content,
+        };
+      }),
     ];
 
     // Try Google Gemini first, with retry on 429

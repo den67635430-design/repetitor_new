@@ -3,7 +3,7 @@ import { supabase } from "../integrations/supabase/client";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
-type Message = { role: "user" | "assistant"; content: string };
+type Message = { role: "user" | "assistant"; content: string; imageUrl?: string };
 
 interface StreamChatParams {
   messages: Message[];

@@ -159,8 +159,9 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
       ...messages.filter(m => m.text !== `Привет, ${user.name}! Чем я могу помочь? 😊`).map(m => ({
         role: m.role === 'model' ? ('assistant' as const) : ('user' as const),
         content: m.text,
+        ...(m.imageUrl ? { imageUrl: m.imageUrl } : {}),
       })),
-      { role: 'user' as const, content: textToSend || 'Посмотри на прикреплённое изображение' },
+      { role: 'user' as const, content: textToSend || 'Посмотри на прикреплённое изображение', ...(imageUrl ? { imageUrl } : {}) },
     ];
 
     let currentAiResponse = '';
