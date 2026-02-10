@@ -210,8 +210,12 @@ const AIChat: React.FC<Props> = ({ user, subject, mode, onBack }) => {
   };
 
   const handleMicToggle = () => {
-    if (isListening) stopListening();
-    else startListening();
+    if (isListening) {
+      stopListening();
+      // After stopping, the transcript is already in input via useEffect
+    } else {
+      startListening();
+    }
   };
 
   const handleSpeakMessage = (text: string) => {

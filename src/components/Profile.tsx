@@ -43,6 +43,38 @@ const Profile: React.FC<Props> = ({ user, sub, onBack, onLogout, onUpdateProfile
       .update({ voice_preference: voice } as any)
       .eq('user_id', user.id);
     setVoiceSaving(false);
+    // Play voice preview
+    playVoicePreview(voice);
+  };
+
+  const playVoicePreview = async (voice: string) => {
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) return;
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            text: 'Привет! Чем могу помочь?',
+            voiceId: voice,
+          }),
+        }
+      );
+      if (!response.ok) return;
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => URL.revokeObjectURL(url);
+      audio.play();
+    } catch (e) {
+      console.error('Voice preview failed:', e);
+    }
   };
 
   const handleSaveType = async () => {

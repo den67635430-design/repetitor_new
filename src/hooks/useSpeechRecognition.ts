@@ -33,7 +33,7 @@ export function useSpeechRecognition(lang = 'ru-RU'): UseSpeechRecognitionReturn
     const recognition = new SpeechRecognition();
     recognition.lang = lang;
     recognition.interimResults = true;
-    recognition.continuous = false; // Single utterance to avoid duplication
+    recognition.continuous = true; // Keep recording until user explicitly stops
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let fullTranscript = '';
@@ -47,7 +47,12 @@ export function useSpeechRecognition(lang = 'ru-RU'): UseSpeechRecognitionReturn
     };
 
     recognition.onend = () => {
-      setIsListening(false);
+      // In continuous mode, restart if still supposed to be listening
+      if (recognitionRef.current === recognition) {
+        try { recognition.start(); } catch { setIsListening(false); }
+      } else {
+        setIsListening(false);
+      }
     };
 
     recognition.onerror = (event: any) => {
