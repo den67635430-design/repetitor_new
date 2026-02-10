@@ -96,14 +96,17 @@ serve(async (req) => {
       );
     }
 
-    console.log("ElevenLabs TTS streaming response started");
+    console.log("ElevenLabs TTS: buffering full audio response");
 
-    // Stream the response directly to client for minimal latency
-    return new Response(response.body, {
+    // Buffer the full audio to prevent cutoff from edge function timeouts
+    const audioBuffer = await response.arrayBuffer();
+    console.log("ElevenLabs TTS: audio buffered, size:", audioBuffer.byteLength);
+
+    return new Response(audioBuffer, {
       headers: {
         ...corsHeaders,
         "Content-Type": "audio/mpeg",
-        "Transfer-Encoding": "chunked",
+        "Content-Length": String(audioBuffer.byteLength),
       },
     });
   } catch (e) {
