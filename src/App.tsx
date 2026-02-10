@@ -42,16 +42,24 @@ const App: React.FC = () => {
     }
   }, [user, hasProfile, loading]);
 
-  // Device limit check
+  // Device limit check — skip in test mode
   useEffect(() => {
     if (user && hasProfile) {
-      checkAndRegisterDevice(user.id).then(result => {
-        if (!result.allowed) {
-          setDeviceBlocked(result.message || 'Превышен лимит устройств.');
-        }
-      });
+      if (testMode) {
+        // In test mode, register device but don't block
+        checkAndRegisterDevice(user.id);
+        setDeviceBlocked(null);
+      } else {
+        checkAndRegisterDevice(user.id).then(result => {
+          if (!result.allowed) {
+            setDeviceBlocked(result.message || 'Превышен лимит устройств.');
+          } else {
+            setDeviceBlocked(null);
+          }
+        });
+      }
     }
-  }, [user, hasProfile]);
+  }, [user, hasProfile, testMode]);
 
   // Telegram WebApp init
   useEffect(() => {
