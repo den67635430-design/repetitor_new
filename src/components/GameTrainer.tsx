@@ -1,38 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
+import { GAME_TYPES, CORRECT_RESPONSES, WRONG_RESPONSES, pickRandom } from './games/gameData';
+import { generateQuestion, GameQuestion } from './games/questionGenerators';
 
 interface Props {
   onBack: () => void;
 }
-
-const GAME_TYPES = [
-  { id: 'count', name: 'Сосчитай предметы', icon: '🍎' },
-  { id: 'letter', name: 'Найди букву', icon: '🅰️' },
-  { id: 'color', name: 'Сопоставь цвета', icon: '🎨' },
-];
-
-const RUSSIAN_LETTERS = 'АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЩЭЮЯ'.split('');
-const COLORS = [
-  { name: 'Красный', emoji: '🔴', color: 'bg-red-500' },
-  { name: 'Синий', emoji: '🔵', color: 'bg-blue-500' },
-  { name: 'Зелёный', emoji: '🟢', color: 'bg-green-500' },
-  { name: 'Жёлтый', emoji: '🟡', color: 'bg-yellow-400' },
-  { name: 'Оранжевый', emoji: '🟠', color: 'bg-orange-500' },
-  { name: 'Фиолетовый', emoji: '🟣', color: 'bg-purple-500' },
-];
-const FRUIT_EMOJIS = ['🍎', '🍊', '🍋', '🍇', '🍓', '🍒', '🍑', '🥝'];
 
 interface AnswerFeedback {
   selected: number | string;
   correct: boolean;
 }
 
-type GameQuestion = {
-  text: string;
-  visual: React.ReactNode;
-  options: (number | string)[];
-  answer: number | string;
-};
+const TOTAL_ROUNDS = 5;
 
 const GameTrainer: React.FC<Props> = ({ onBack }) => {
   const [gameState, setGameState] = useState<'selection' | 'playing' | 'results'>('selection');
@@ -43,124 +23,63 @@ const GameTrainer: React.FC<Props> = ({ onBack }) => {
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
   const { speak } = useSpeechSynthesis();
 
-  const generateCountQuestion = (): GameQuestion => {
-    const num = Math.floor(Math.random() * 5) + 1;
-    const emoji = FRUIT_EMOJIS[Math.floor(Math.random() * FRUIT_EMOJIS.length)];
-    const optionsSet = new Set<number>([num]);
-    while (optionsSet.size < 4) {
-      const opt = Math.floor(Math.random() * 7) + 1;
-      if (opt > 0) optionsSet.add(opt);
-    }
-    const options = Array.from(optionsSet).sort(() => Math.random() - 0.5);
-    return {
-      text: `Сколько ${emoji} ты видишь?`,
-      visual: <div className="text-6xl tracking-widest">{Array(num).fill(emoji).join(' ')}</div>,
-      options,
-      answer: num,
-    };
-  };
-
-  const generateLetterQuestion = (): GameQuestion => {
-    const targetIdx = Math.floor(Math.random() * RUSSIAN_LETTERS.length);
-    const targetLetter = RUSSIAN_LETTERS[targetIdx];
-    const optionsSet = new Set<string>([targetLetter]);
-    while (optionsSet.size < 4) {
-      const randLetter = RUSSIAN_LETTERS[Math.floor(Math.random() * RUSSIAN_LETTERS.length)];
-      optionsSet.add(randLetter);
-    }
-    const options = Array.from(optionsSet).sort(() => Math.random() - 0.5);
-    return {
-      text: `Найди букву "${targetLetter}"`,
-      visual: (
-        <div className="text-8xl font-extrabold text-sky-600">{targetLetter}</div>
-      ),
-      options,
-      answer: targetLetter,
-    };
-  };
-
-  const generateColorQuestion = (): GameQuestion => {
-    const targetIdx = Math.floor(Math.random() * COLORS.length);
-    const targetColor = COLORS[targetIdx];
-    const optionsSet = new Set<string>([targetColor.name]);
-    while (optionsSet.size < 4) {
-      const randColor = COLORS[Math.floor(Math.random() * COLORS.length)];
-      optionsSet.add(randColor.name);
-    }
-    const options = Array.from(optionsSet).sort(() => Math.random() - 0.5);
-    return {
-      text: `Какой это цвет?`,
-      visual: (
-        <div className={`w-24 h-24 rounded-full mx-auto ${targetColor.color} shadow-lg`} />
-      ),
-      options,
-      answer: targetColor.name,
-    };
-  };
-
-  const generateQuestion = (gameType: string) => {
-    let q: GameQuestion;
-    switch (gameType) {
-      case 'letter':
-        q = generateLetterQuestion();
-        break;
-      case 'color':
-        q = generateColorQuestion();
-        break;
-      default:
-        q = generateCountQuestion();
-    }
+  const nextQuestion = useCallback((gameId: string) => {
+    const q = generateQuestion(gameId);
     setQuestion(q);
     setFeedback(null);
     speak(q.text);
-  };
+  }, [speak]);
 
-  const startGame = (gameId: string) => {
+  const startGame = useCallback((gameId: string) => {
     setSelectedGame(gameId);
     setScore(0);
     setCurrentRound(1);
     setGameState('playing');
-    setTimeout(() => generateQuestion(gameId), 100);
-  };
+    setTimeout(() => nextQuestion(gameId), 100);
+  }, [nextQuestion]);
 
-  const handleAnswer = (val: number | string) => {
-    if (feedback) return;
+  const handleAnswer = useCallback((val: number | string) => {
+    if (feedback || !question) return;
 
-    const correct = val === question?.answer;
+    const correct = val === question.answer;
     setFeedback({ selected: val, correct });
 
     if (correct) {
       setScore(s => s + 1);
-      speak('Правильно! Молодец!');
+      speak(pickRandom(CORRECT_RESPONSES));
     } else {
-      speak(`Неправильно. Правильный ответ: ${question?.answer}`);
+      const resp = pickRandom(WRONG_RESPONSES);
+      speak(resp(question.answer));
     }
 
     setTimeout(() => {
-      if (currentRound < 5) {
+      if (currentRound < TOTAL_ROUNDS) {
         setCurrentRound(r => r + 1);
-        generateQuestion(selectedGame);
+        nextQuestion(selectedGame);
       } else {
         setGameState('results');
         const finalScore = correct ? score + 1 : score;
-        speak(`Молодец! Ты заработал ${finalScore} из пяти звёзд!`);
+        if (finalScore >= 4) {
+          speak(`Ура! Ты настоящий молодец! ${finalScore} из пяти правильных ответов! Так держать!`);
+        } else if (finalScore >= 2) {
+          speak(`Хорошо! ${finalScore} из пяти. Давай попробуем ещё раз и будет ещё лучше!`);
+        } else {
+          speak(`Ничего страшного! ${finalScore} из пяти. Давай потренируемся ещё!`);
+        }
       }
-    }, 1500);
-  };
+    }, 1800);
+  }, [feedback, question, currentRound, score, selectedGame, nextQuestion, speak]);
 
   const getOptionStyle = (opt: number | string) => {
     if (!feedback) {
       return 'bg-white text-sky-600 border-b-8 border-slate-200 hover:bg-sky-100 active:scale-90 active:border-b-0';
     }
-
     if (opt === question?.answer) {
       return 'bg-emerald-100 text-emerald-700 border-b-8 border-emerald-300 scale-105';
     }
-
     if (opt === feedback.selected && !feedback.correct) {
       return 'bg-red-100 text-red-600 border-b-8 border-red-300 scale-95 opacity-70';
     }
-
     return 'bg-white text-slate-300 border-b-8 border-slate-100 opacity-50';
   };
 
@@ -175,33 +94,40 @@ const GameTrainer: React.FC<Props> = ({ onBack }) => {
         <h2 className="text-2xl font-extrabold text-sky-900">Игра-тренажёр</h2>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center space-y-8">
+      <div className="flex-1 flex flex-col items-center justify-center space-y-6 overflow-y-auto">
         {gameState === 'selection' && (
-          <div className="w-full space-y-4">
+          <div className="w-full space-y-3">
             <h3 className="text-center font-bold text-sky-800 text-lg mb-4">Выбери игру:</h3>
             {GAME_TYPES.map(g => (
               <button
                 key={g.id}
                 onClick={() => startGame(g.id)}
-                className="w-full bg-white p-6 rounded-3xl shadow-md border-2 border-transparent active:border-sky-400 flex items-center gap-6 group transition-all"
+                className="w-full bg-white p-5 rounded-3xl shadow-md border-2 border-transparent active:border-sky-400 flex items-center gap-5 group transition-all"
               >
-                <span className="text-5xl group-hover:scale-110 transition-transform">{g.icon}</span>
-                <span className="text-xl font-bold text-sky-900">{g.name}</span>
+                <span className="text-4xl group-hover:scale-110 transition-transform">{g.icon}</span>
+                <div className="text-left">
+                  <span className="text-lg font-bold text-sky-900 block">{g.name}</span>
+                  <span className="text-sm text-slate-500">{g.description}</span>
+                </div>
               </button>
             ))}
           </div>
         )}
 
         {gameState === 'playing' && question && (
-          <div className="w-full space-y-8 animate-slide-in">
+          <div className="w-full space-y-6 animate-slide-in">
             <div className="flex justify-between items-center w-full bg-white/50 p-4 rounded-2xl">
-              <span className="font-bold text-sky-700">Раунд {currentRound}/5</span>
-              <span className="font-bold text-sky-700">⭐ {score}</span>
+              <span className="font-bold text-sky-700">Раунд {currentRound}/{TOTAL_ROUNDS}</span>
+              <div className="flex gap-1">
+                {Array.from({ length: TOTAL_ROUNDS }).map((_, i) => (
+                  <span key={i} className={`text-xl ${i < score ? 'opacity-100' : 'opacity-20'}`}>⭐</span>
+                ))}
+              </div>
             </div>
 
-            <div className="bg-white p-8 rounded-[40px] shadow-xl text-center space-y-6">
+            <div className="bg-white p-8 rounded-[36px] shadow-xl text-center space-y-5">
               {question.visual}
-              <h4 className="text-2xl font-bold text-slate-800">{question.text}</h4>
+              <h4 className="text-xl font-bold text-slate-800 leading-relaxed">{question.text}</h4>
             </div>
 
             {feedback && (
@@ -210,7 +136,7 @@ const GameTrainer: React.FC<Props> = ({ onBack }) => {
                   ? 'bg-emerald-100 text-emerald-700'
                   : 'bg-red-100 text-red-700'
               }`}>
-                {feedback.correct ? '✅ Правильно! Молодец!' : `❌ Неправильно. Ответ: ${question.answer}`}
+                {feedback.correct ? '✅ Правильно!' : `❌ Ответ: ${question.answer}`}
               </div>
             )}
 
@@ -220,7 +146,7 @@ const GameTrainer: React.FC<Props> = ({ onBack }) => {
                   key={`${opt}-${idx}`}
                   onClick={() => handleAnswer(opt)}
                   disabled={!!feedback}
-                  className={`p-8 rounded-[32px] shadow-lg text-3xl font-extrabold transition-all ${getOptionStyle(opt)}`}
+                  className={`p-6 rounded-[28px] shadow-lg text-2xl font-extrabold transition-all ${getOptionStyle(opt)}`}
                 >
                   {opt}
                 </button>
@@ -231,18 +157,30 @@ const GameTrainer: React.FC<Props> = ({ onBack }) => {
 
         {gameState === 'results' && (
           <div className="bg-white p-10 rounded-[40px] shadow-2xl text-center space-y-6 animate-slide-in w-full">
-            <div className="text-8xl">🏆</div>
-            <h3 className="text-3xl font-extrabold text-sky-900">Молодец!</h3>
-            <p className="text-lg text-slate-600 font-medium">Ты заработал {score} звёзд!</p>
+            <div className="text-8xl">{score >= 4 ? '🏆' : score >= 2 ? '👍' : '💪'}</div>
+            <h3 className="text-3xl font-extrabold text-sky-900">
+              {score >= 4 ? 'Отлично!' : score >= 2 ? 'Хорошо!' : 'Попробуй ещё!'}
+            </h3>
+            <p className="text-lg text-slate-600 font-medium">Ты заработал {score} из {TOTAL_ROUNDS} звёзд!</p>
             <div className="flex gap-2 justify-center">
-              {Array(score).fill(0).map((_, i) => <span key={i} className="text-3xl">⭐</span>)}
+              {Array.from({ length: TOTAL_ROUNDS }).map((_, i) => (
+                <span key={i} className={`text-3xl ${i < score ? '' : 'opacity-20'}`}>⭐</span>
+              ))}
             </div>
-            <button
-              onClick={() => setGameState('selection')}
-              className="w-full bg-sky-600 text-white py-5 rounded-3xl font-bold text-xl shadow-lg hover:bg-sky-700 active:scale-95 transition-all"
-            >
-              Играть ещё
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => startGame(selectedGame)}
+                className="flex-1 bg-sky-600 text-white py-4 rounded-3xl font-bold text-lg shadow-lg hover:bg-sky-700 active:scale-95 transition-all"
+              >
+                Ещё раз
+              </button>
+              <button
+                onClick={() => setGameState('selection')}
+                className="flex-1 bg-white text-sky-600 py-4 rounded-3xl font-bold text-lg shadow-lg border-2 border-sky-200 hover:bg-sky-50 active:scale-95 transition-all"
+              >
+                Другая игра
+              </button>
+            </div>
           </div>
         )}
       </div>
