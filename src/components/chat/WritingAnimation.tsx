@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { getCharacterStrokes } from './letterStrokes';
-import { getCursiveStrokes } from './cursiveStrokes';
 
 interface Props {
   character: string;
@@ -20,10 +19,9 @@ const WritingAnimation: React.FC<Props> = ({ character, cursive = false }) => {
   const [progress, setProgress] = useState(-1);
   const [measured, setMeasured] = useState(false);
 
+  // For cursive mode, always use font-based rendering (no SVG strokes needed)
   const strokes = useMemo(() => {
-    if (cursive) {
-      return getCursiveStrokes(character) ?? getCharacterStrokes(character);
-    }
+    if (cursive) return null; // Force font-based cursive rendering
     return getCharacterStrokes(character);
   }, [character, cursive]);
 
@@ -180,7 +178,7 @@ const WritingAnimation: React.FC<Props> = ({ character, cursive = false }) => {
   }
 
   // ===== FALLBACK: Text-based stroke tracing (for unknown chars) =====
-  return <FallbackWriting character={character} progress={progress} />;
+  return <FallbackWriting character={character} progress={progress} cursive={cursive} />;
 };
 
 // ---- Shared styles ----
@@ -238,8 +236,9 @@ function PenCursor({ x, y }: { x: number; y: number }) {
 }
 
 /** Fallback for characters without stroke-path data — thin text outline tracing */
-function FallbackWriting({ character, progress }: { character: string; progress: number }) {
+function FallbackWriting({ character, progress, cursive = false }: { character: string; progress: number; cursive?: boolean }) {
   const phase = progress >= 1 ? 'filled' : progress >= 0 ? 'tracing' : 'idle';
+  const fontFamily = cursive ? "'Marck Script', cursive" : "'Times New Roman', serif";
 
   return (
     <div className="my-3 flex flex-col items-center">
@@ -251,7 +250,7 @@ function FallbackWriting({ character, progress }: { character: string; progress:
           <text
             x="50%" y="55%"
             dominantBaseline="middle" textAnchor="middle"
-            fontSize="90" fontFamily="'Times New Roman', serif" fontWeight="bold"
+            fontSize={cursive ? "80" : "90"} fontFamily={fontFamily} fontWeight={cursive ? "normal" : "bold"}
             fill="none" stroke="#d1d5db" strokeWidth="1" strokeDasharray="3 3"
           >
             {character}
@@ -263,7 +262,7 @@ function FallbackWriting({ character, progress }: { character: string; progress:
           <text
             x="50%" y="55%"
             dominantBaseline="middle" textAnchor="middle"
-            fontSize="90" fontFamily="'Times New Roman', serif" fontWeight="bold"
+            fontSize={cursive ? "80" : "90"} fontFamily={fontFamily} fontWeight={cursive ? "normal" : "bold"}
             fill={phase === 'filled' ? '#1e40af' : 'none'}
             stroke="#2563eb"
             strokeWidth="1.5"
@@ -278,7 +277,7 @@ function FallbackWriting({ character, progress }: { character: string; progress:
       </div>
 
       <span className="mt-2 text-xs text-slate-500 font-medium">
-        ✏️ Пишем: «{character}»
+        ✏️ Пишем{cursive ? ' прописную' : ''}: «{character}»
       </span>
     </div>
   );
