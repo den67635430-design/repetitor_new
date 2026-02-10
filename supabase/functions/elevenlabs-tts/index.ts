@@ -59,16 +59,14 @@ serve(async (req) => {
     const cleanText = text.trim().substring(0, 5000);
     console.log("ElevenLabs TTS request:", cleanText.substring(0, 60));
 
-    // Voice IDs:
-    // Female "Alice" - warm, gentle: Xb7hH8MSUJpSbSDYk0k2
-    // Male "Daniel" - calm, clear: onwK4e9ZLuTAKqWW03F9
     const FEMALE_VOICE = "Xb7hH8MSUJpSbSDYk0k2";
     const MALE_VOICE = "onwK4e9ZLuTAKqWW03F9";
     
     const voiceId = requestedVoiceId === "male" ? MALE_VOICE : FEMALE_VOICE;
 
+    // Use streaming endpoint for lower latency (time-to-first-audio)
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=mp3_44100_128`,
       {
         method: "POST",
         headers: {
@@ -77,13 +75,13 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           text: cleanText,
-          model_id: "eleven_multilingual_v2",
+          model_id: "eleven_turbo_v2_5",
           voice_settings: {
-          stability: 0.65,
-          similarity_boost: 0.80,
-          style: 0.25,
-          use_speaker_boost: true,
-          speed: 0.92,
+            stability: 0.65,
+            similarity_boost: 0.80,
+            style: 0.25,
+            use_speaker_boost: true,
+            speed: 0.92,
           },
         }),
       }
@@ -98,13 +96,14 @@ serve(async (req) => {
       );
     }
 
-    const audioBuffer = await response.arrayBuffer();
-    console.log("ElevenLabs TTS success, audio size:", audioBuffer.byteLength);
+    console.log("ElevenLabs TTS streaming response started");
 
-    return new Response(audioBuffer, {
+    // Stream the response directly to client for minimal latency
+    return new Response(response.body, {
       headers: {
         ...corsHeaders,
         "Content-Type": "audio/mpeg",
+        "Transfer-Encoding": "chunked",
       },
     });
   } catch (e) {

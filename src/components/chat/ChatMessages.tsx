@@ -128,12 +128,12 @@ const ChatMessages: React.FC<Props> = ({ messages, isTyping, error, isPreschool,
             {m.role === 'model' && m.text && (
               <button
                 onClick={() => onSpeakMessage(m.text)}
-                className={`p-1 rounded-full transition-colors ${
-                  isSpeaking ? 'text-blue-600 animate-pulse' : 'text-slate-400 hover:text-blue-600'
+                className={`p-2 rounded-full transition-colors ${
+                  isSpeaking ? 'text-white bg-blue-600 animate-pulse shadow-md' : 'text-blue-600 bg-blue-50 hover:bg-blue-100 shadow-sm'
                 }`}
                 title={isSpeaking ? 'Остановить' : 'Озвучить'}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   {isSpeaking ? (
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z M10 9v6 M14 9v6" />
                   ) : (

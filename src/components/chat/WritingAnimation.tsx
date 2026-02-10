@@ -235,10 +235,18 @@ function PenCursor({ x, y }: { x: number; y: number }) {
   );
 }
 
-/** Fallback for characters without stroke-path data — thin text outline tracing */
+/** Fallback for characters without stroke-path data — text outline tracing with pen cursor */
 function FallbackWriting({ character, progress, cursive = false }: { character: string; progress: number; cursive?: boolean }) {
   const phase = progress >= 1 ? 'filled' : progress >= 0 ? 'tracing' : 'idle';
   const fontFamily = cursive ? "'Marck Script', cursive" : "'Times New Roman', serif";
+
+  // Simulated pen position based on progress — moves across the character area
+  const penProgress = phase === 'tracing' ? Math.min(progress / 0.9, 1) : 0;
+  const showPen = phase === 'tracing' && penProgress < 1;
+
+  // Pen follows a rough zig-zag path across the character
+  const penX = 24 + penProgress * 144; // move left to right across 192px container
+  const penY = 60 + Math.sin(penProgress * Math.PI * 3) * 40; // wave pattern
 
   return (
     <div className="my-3 flex flex-col items-center">
@@ -274,6 +282,33 @@ function FallbackWriting({ character, progress, cursive = false }: { character: 
             {character}
           </text>
         </svg>
+
+        {/* Pen cursor */}
+        {showPen && (
+          <div
+            className="absolute pointer-events-none z-10"
+            style={{
+              left: penX,
+              top: penY,
+              transformOrigin: '3px 21px',
+              transform: 'translate(-3px, -21px) rotate(-35deg)',
+              transition: 'left 0.05s linear, top 0.05s linear',
+            }}
+          >
+            <svg
+              className="w-7 h-7 text-amber-700 drop-shadow-md"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              <path d="m15 5 4 4" />
+            </svg>
+          </div>
+        )}
       </div>
 
       <span className="mt-2 text-xs text-slate-500 font-medium">
