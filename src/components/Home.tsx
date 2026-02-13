@@ -47,20 +47,22 @@ const Home: React.FC<Props> = ({ user, sub, testMode, isAdmin, onNavigate, onSel
           </div>
         </div>
         
-        {!trial.hasTrialStarted && sub.status !== SubscriptionStatus.SUBSCRIBED_ACTIVE ? (
-          <button 
-            onClick={startTrial}
-            className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all"
-          >
-            🎁 Начать бесплатно — 10 дней
-          </button>
-        ) : (
-          <button 
-            onClick={() => onNavigate('pricing')}
-            className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all"
-          >
-            {sub.status === SubscriptionStatus.SUBSCRIBED_ACTIVE ? 'Управление подпиской' : 'Активировать полный доступ'}
-          </button>
+        {!testMode && (
+          !trial.hasTrialStarted && sub.status !== SubscriptionStatus.SUBSCRIBED_ACTIVE ? (
+            <button 
+              onClick={startTrial}
+              className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all"
+            >
+              🎁 Начать бесплатно — 10 дней
+            </button>
+          ) : (
+            <button 
+              onClick={() => onNavigate('pricing')}
+              className="w-full bg-white text-blue-700 py-3 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all"
+            >
+              {sub.status === SubscriptionStatus.SUBSCRIBED_ACTIVE ? 'Управление подпиской' : 'Активировать полный доступ'}
+            </button>
+          )
         )}
       </section>
       {/* Main Grid */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SubscriptionStatus, SubscriptionInfo } from './types';
 import { useAuth } from './hooks/useAuth';
 import { useDeviceLimit } from './hooks/useDeviceLimit';
@@ -25,6 +25,17 @@ const App: React.FC = () => {
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
   const [deviceBlocked, setDeviceBlocked] = useState<string | null>(null);
+  const [testModeNotification, setTestModeNotification] = useState(false);
+  const prevTestMode = useRef(testMode);
+
+  // Detect test mode turning OFF → show notification
+  useEffect(() => {
+    if (prevTestMode.current === true && testMode === false) {
+      setTestModeNotification(true);
+      setTimeout(() => setTestModeNotification(false), 8000);
+    }
+    prevTestMode.current = testMode;
+  }, [testMode]);
 
   // Route user based on auth state
   useEffect(() => {
@@ -262,6 +273,16 @@ const App: React.FC = () => {
           <p className="text-xs text-amber-700 font-semibold">
             🧪 Приложение находится в режиме тестирования. Платные услуги временно недоступны.
           </p>
+        </div>
+      )}
+
+      {/* Notification when test mode is turned off */}
+      {testModeNotification && (
+        <div className="bg-green-50 border-b border-green-200 px-4 py-3 text-center animate-slide-in">
+          <p className="text-xs text-green-800 font-semibold">
+            ✅ Тестовый режим выключен. У вас есть 10 дней бесплатного пользования. После этого вам нужно будет выбрать тариф.
+          </p>
+          <button onClick={() => setTestModeNotification(false)} className="mt-1 text-[10px] text-green-600 underline">Закрыть</button>
         </div>
       )}
 
